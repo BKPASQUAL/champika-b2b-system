@@ -66,7 +66,10 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  FileDown,
+  ShoppingCart,
 } from "lucide-react";
+import { generateBusinessReportPdf } from "./business-report-pdf";
 import { toast } from "sonner";
 import { BUSINESS_THEMES, BUSINESS_IDS } from "@/app/config/business-constants";
 
@@ -385,6 +388,27 @@ export default function BusinessAnalyticsPage() {
     };
   }, [monthlyData]);
 
+  // Month-by-month purchases / sales / profit / realized net profit (all reps)
+  const monthSummary = useMemo(() => {
+    const rows = ((current?.months || []) as any[]).map((m) => {
+      const net = m.netProfit ?? (m.profit || 0) - (m.pendingClaimCost || 0);
+      const costed = (m.salesAmount || 0) - (m.noCostSales || 0);
+      return { ...m, net, netPct: costed > 0 ? (net / costed) * 100 : 0 };
+    });
+    const t = rows.reduce(
+      (s, m) => ({
+        purchase: s.purchase + (m.purchaseAmount || 0),
+        sales: s.sales + (m.salesAmount || 0),
+        profit: s.profit + (m.profit || 0),
+        pending: s.pending + (m.pendingClaimCost || 0),
+        net: s.net + m.net,
+        costed: s.costed + (m.salesAmount || 0) - (m.noCostSales || 0),
+      }),
+      { purchase: 0, sales: 0, profit: 0, pending: 0, net: 0, costed: 0 }
+    );
+    return { rows, t: { ...t, netPct: t.costed > 0 ? (t.net / t.costed) * 100 : 0 } };
+  }, [current]);
+
   const repFilterOptions = useMemo(() => {
     const namesSet = new Set<string>();
     (current?.reps || []).forEach((r: any) => {
@@ -536,11 +560,34 @@ export default function BusinessAnalyticsPage() {
                   {current.invoiceCount} invoices · {current.customerCount} customers · {current.products?.length || 0} products
                 </p>
               </div>
-              {!isOverall && (
-                <Badge variant="outline" className={`${getBizColor(current.id)} border-current`}>
-                  {current.margin.toFixed(1)}% margin
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                {!isOverall && (
+                  <Badge variant="outline" className={`${getBizColor(current.id)} border-current`}>
+                    {current.margin.toFixed(1)}% margin
+                  </Badge>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  disabled={loading}
+                  onClick={() => {
+                    try {
+                      generateBusinessReportPdf({
+                        current,
+                        businesses,
+                        periodLabel: dateFilter.label || "",
+                        isOverall,
+                      });
+                    } catch (e) {
+                      console.error(e);
+                      toast.error("Failed to create PDF");
+                    }
+                  }}
+                >
+                  <FileDown className="h-3.5 w-3.5 mr-1" /> Download PDF
+                </Button>
+              </div>
             </div>
 
             {/* KPI Cards — Restructured into Reconciliation and Receivables Rows */}
@@ -655,7 +702,20 @@ export default function BusinessAnalyticsPage() {
               {/* Row 2: Outstanding Balance & Customer Counts */}
               <div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Receivables & Customer Reach</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+                  {/* Total Purchases */}
+                  <Card className="bg-violet-50 border-violet-200">
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-violet-700 font-medium flex items-center gap-1">
+                        <ShoppingCart className="h-3 w-3" /> Total Purchases
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-sm md:text-xl font-bold text-violet-700">LKR {fmt(current.totalPurchases || 0)}</div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{current.purchaseCount || 0} purchase bills</p>
+                    </CardContent>
+                  </Card>
+
                   {/* Collections Received */}
                   <Card className="bg-emerald-50 border-emerald-200">
                     <CardHeader className="pb-1 pt-3 px-3 md:px-4">
@@ -790,6 +850,68 @@ export default function BusinessAnalyticsPage() {
               </Card>
             )}
 
+            {/* Monthly summary: purchases vs sales vs profit vs realized net profit */}
+            <Card>
+              <CardHeader className="pb-3 px-4">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4" /> Monthly Purchases, Sales & Profit
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Month</TableHead>
+                        <TableHead className="text-right">Purchases</TableHead>
+                        <TableHead className="text-right">Sales</TableHead>
+                        <TableHead className="text-right">Profit</TableHead>
+                        <TableHead className="text-right">Pending Claims</TableHead>
+                        <TableHead className="text-right">Realized Net Profit</TableHead>
+                        <TableHead className="text-right">Net %</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {monthSummary.rows.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-6">
+                            No activity in this period
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        monthSummary.rows.map((m: any) => (
+                          <TableRow key={m.month}>
+                            <TableCell className="text-xs font-medium">{m.monthLabel || m.month}</TableCell>
+                            <TableCell className="text-right text-xs text-violet-700">LKR {fmt(m.purchaseAmount || 0)}</TableCell>
+                            <TableCell className="text-right text-xs text-blue-700">LKR {fmt(m.salesAmount || 0)}</TableCell>
+                            <TableCell className="text-right text-xs text-green-700">LKR {fmt(m.profit || 0)}</TableCell>
+                            <TableCell className="text-right text-xs text-orange-700">LKR {fmt(m.pendingClaimCost || 0)}</TableCell>
+                            <TableCell className={`text-right text-xs font-semibold ${m.net >= 0 ? "text-slate-800" : "text-rose-700"}`}>
+                              LKR {fmt(m.net)}
+                            </TableCell>
+                            <TableCell className="text-right"><MarginBadge margin={m.netPct} /></TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                      {monthSummary.rows.length > 1 && (
+                        <TableRow className="border-t-2 font-bold bg-muted/30">
+                          <TableCell className="text-xs font-bold">Total</TableCell>
+                          <TableCell className="text-right text-xs font-bold text-violet-700">LKR {fmt(monthSummary.t.purchase)}</TableCell>
+                          <TableCell className="text-right text-xs font-bold text-blue-700">LKR {fmt(monthSummary.t.sales)}</TableCell>
+                          <TableCell className="text-right text-xs font-bold text-green-700">LKR {fmt(monthSummary.t.profit)}</TableCell>
+                          <TableCell className="text-right text-xs font-bold text-orange-700">LKR {fmt(monthSummary.t.pending)}</TableCell>
+                          <TableCell className={`text-right text-xs font-bold ${monthSummary.t.net >= 0 ? "text-slate-800" : "text-rose-700"}`}>
+                            LKR {fmt(monthSummary.t.net)}
+                          </TableCell>
+                          <TableCell className="text-right"><MarginBadge margin={monthSummary.t.netPct} /></TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Business breakdown table (Overall only) */}
             {isOverall && (
               <Card>
@@ -802,6 +924,7 @@ export default function BusinessAnalyticsPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Business</TableHead>
+                          <TableHead className="text-right">Purchases</TableHead>
                           <TableHead className="text-right">Total Sales</TableHead>
                           <TableHead className="text-right">Gross Profit</TableHead>
                           <TableHead className="text-right">Total Loss</TableHead>
@@ -816,6 +939,9 @@ export default function BusinessAnalyticsPage() {
                         {/* Totals row at top */}
                         <TableRow className="border-b-2 font-bold bg-muted/30">
                           <TableCell className="font-bold">Total</TableCell>
+                          <TableCell className="text-right text-violet-700 font-bold">
+                            LKR {fmt(overall?.totalPurchases || 0)}
+                          </TableCell>
                           <TableCell className="text-right text-blue-700 font-bold">
                             LKR {fmt(overall?.totalRevenue || 0)}
                           </TableCell>
@@ -848,6 +974,9 @@ export default function BusinessAnalyticsPage() {
                                 <span className={`w-2 h-2 rounded-full shrink-0 ${getBizBg(biz.id)}`} />
                                 <span className="font-medium text-xs md:text-sm">{biz.name}</span>
                               </div>
+                            </TableCell>
+                            <TableCell className="text-right text-violet-700">
+                              {(biz.totalPurchases || 0) > 0 ? `LKR ${fmt(biz.totalPurchases)}` : "—"}
                             </TableCell>
                             <TableCell className="text-right font-medium text-blue-700">
                               LKR {fmt(biz.totalRevenue)}

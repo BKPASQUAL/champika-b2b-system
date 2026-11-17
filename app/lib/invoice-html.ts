@@ -147,6 +147,16 @@ export const DIVISIONS: Record<string, DivisionConfig> = {
   admin:        { division: "Head Office",            address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
 };
 
+// "Extra Discount (4%)" — uses the saved % from the order; if none was saved,
+// works it out from the discount amount and the base it came off.
+const extraDiscountLabelFor = (invoice: any, amount: number, base: number): string => {
+  let pct = Number(invoice?.extraDiscountPercent) || 0;
+  if (pct <= 0 && amount > 0 && base > 0) pct = (amount / base) * 100;
+  if (pct <= 0) return "Extra Discount";
+  const pctStr = String(Math.round(pct * 100) / 100); // 4 → "4", 3.5 → "3.5"
+  return `Extra Discount (${pctStr}%)`;
+};
+
 // Every original bill number on a return note: from each item's billRef and every [INV:x] tag in the notes
 const getBillRefs = (items: any[], rawNotes: string): string[] => [
   ...new Set(
@@ -230,6 +240,7 @@ export const generateInvoiceHTML = async (
   const subTotal    = items.reduce((s: number, i: any) => s + (i.total || 0), 0);
   const grandTotal  = invoice.grandTotal || invoice.totalAmount || 0;
   const extraDiscount = Math.max(0, subTotal - grandTotal - cashDiscountAmount - returnsTotal);
+  const extraDiscountLabel = extraDiscountLabelFor(invoice, extraDiscount, subTotal - returnsTotal);
 
   // Detect Return Note documents
   const isReturnNote = Boolean(
@@ -617,7 +628,7 @@ export const generateInvoiceHTML = async (
               <td style="padding:5px 0;font-size:12px;color:#c00;text-align:right;white-space:nowrap;">- LKR ${fmt(returnsTotal)}</td>
             </tr>` : ""}
             ${extraDiscount > 1 ? `<tr>
-              <td style="padding:5px 0;font-size:12px;color:#333;">Extra Discount</td>
+              <td style="padding:5px 0;font-size:12px;color:#333;">${extraDiscountLabel}</td>
               <td style="padding:5px 0;font-size:12px;color:#000;text-align:right;white-space:nowrap;">- LKR ${fmt(extraDiscount)}</td>
             </tr>` : ""}
             ${cashDiscountAmount > 0 ? `<tr>
@@ -732,6 +743,7 @@ export const generateHalfPageInvoiceHTML = async (
   const grandTotal    = invoice.grandTotal || invoice.totalAmount || 0;
   const walkInReturnsTotal = divisionKey !== "retail" ? 0 : walkInReturnsOf(invoice).reduce((t: number, r: any) => t + Number(r.totalValue || 0), 0);
   const extraDiscount = Math.max(0, subTotal - grandTotal - cashDiscountAmount - walkInReturnsTotal);
+  const extraDiscountLabel = extraDiscountLabelFor(invoice, extraDiscount, subTotal - walkInReturnsTotal);
 
   // Detect Return Note documents
   const isReturnNote = Boolean(
@@ -1049,7 +1061,7 @@ export const generateHalfPageInvoiceHTML = async (
             <td style="padding:3px 0;font-size:11px;color:#c00;text-align:right;white-space:nowrap;">- LKR ${fmt(walkInReturnsTotal)}</td>
           </tr>` : ""}
           ${extraDiscount > 1 ? `<tr>
-            <td style="padding:3px 0;font-size:11px;color:#333;">Extra Discount</td>
+            <td style="padding:3px 0;font-size:11px;color:#333;">${extraDiscountLabel}</td>
             <td style="padding:3px 0;font-size:11px;color:#000;text-align:right;white-space:nowrap;">- LKR ${fmt(extraDiscount)}</td>
           </tr>` : ""}
           <tr>

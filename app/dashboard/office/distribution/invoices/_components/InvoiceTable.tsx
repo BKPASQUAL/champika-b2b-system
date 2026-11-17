@@ -20,7 +20,10 @@ import {
   Truck,
   Eye,
   Share2,
+  X,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { shareBulkInvoices } from "@/app/lib/invoice-print";
 import { toast } from "sonner";
 import {
   Invoice,
@@ -66,6 +69,42 @@ export function InvoiceTable({
   onItemsPerPageChange,
 }: InvoiceTableProps) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  // Selected invoices (kept across pages) for bulk PDF share
+  const [selected, setSelected] = useState<Map<string, Invoice>>(new Map());
+  const [sharingBulk, setSharingBulk] = useState(false);
+
+  const toggleSelect = (inv: Invoice) => {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (next.has(inv.id)) next.delete(inv.id);
+      else next.set(inv.id, inv);
+      return next;
+    });
+  };
+
+  const allOnPageSelected =
+    invoices.length > 0 && invoices.every((inv) => selected.has(inv.id));
+  const someOnPageSelected = invoices.some((inv) => selected.has(inv.id));
+
+  const toggleSelectPage = () => {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (allOnPageSelected) invoices.forEach((inv) => next.delete(inv.id));
+      else invoices.forEach((inv) => next.set(inv.id, inv));
+      return next;
+    });
+  };
+
+  const handleBulkShare = () => {
+    // Same division layout as the row Print button (admin print-utils → "admin"),
+    // so the shared PDFs look exactly like the printed invoices.
+    shareBulkInvoices(Array.from(selected.keys()), "admin", setSharingBulk);
+  };
+
+  const selectedTotalDue = Array.from(selected.values()).reduce(
+    (s, inv) => s + (inv.dueAmount || 0),
+    0
+  );
 
   const handleDownload = async (id: string) => {
     setDownloadingId(id);
@@ -176,6 +215,41 @@ export function InvoiceTable({
 
   return (
     <>
+      {/* ── Bulk selection bar ── */}
+      {selected.size > 0 && (
+        <div className="sticky top-0 z-20 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 shadow-sm dark:border-green-900 dark:bg-green-950/40">
+          <div className="text-sm">
+            <span className="font-semibold">{selected.size} invoice(s) selected</span>
+            <span className="ml-2 text-muted-foreground">
+              Due: LKR {selectedTotalDue.toLocaleString()}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              className="bg-green-600 text-white hover:bg-green-700"
+              onClick={handleBulkShare}
+              disabled={sharingBulk}
+            >
+              {sharingBulk ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Share2 className="mr-1 h-4 w-4" />
+              )}
+              Share PDFs
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelected(new Map())}
+              disabled={sharingBulk}
+            >
+              <X className="mr-1 h-4 w-4" /> Clear
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* ── Mobile / Tablet Card View (hidden on lg+) ── */}
       <div className="block lg:hidden space-y-3">
         {invoices.length === 0 ? (
@@ -190,9 +264,16 @@ export function InvoiceTable({
             >
               {/* Top row: Invoice # + Date */}
               <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={selected.has(invoice.id)}
+                  onCheckedChange={() => toggleSelect(invoice)}
+                  aria-label={`Select invoice ${invoice.manualInvoiceNo || invoice.invoiceNo}`}
+                />
                 <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
                   {invoice.manualInvoiceNo || invoice.invoiceNo}
                 </span>
+                </div>
                 <span className="text-xs text-muted-foreground">
                   {new Date(invoice.date).toLocaleDateString()}
                 </span>
@@ -298,6 +379,13 @@ export function InvoiceTable({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={allOnPageSelected ? true : someOnPageSelected ? "indeterminate" : false}
+                  onCheckedChange={toggleSelectPage}
+                  aria-label="Select all invoices on this page"
+                />
+              </TableHead>
               <TableHead
                 onClick={() => onSort("date")}
                 className="cursor-pointer hover:bg-muted/50"
@@ -362,7 +450,7 @@ export function InvoiceTable({
             {invoices.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="text-center py-12 text-muted-foreground"
                 >
                   No invoices found
@@ -370,7 +458,17 @@ export function InvoiceTable({
               </TableRow>
             ) : (
               invoices.map((invoice) => (
-                <TableRow key={invoice.id}>
+                <TableRow
+                  key={invoice.id}
+                  data-state={selected.has(invoice.id) ? "selected" : undefined}
+                >
+                  <TableCell className="w-10">
+                    <Checkbox
+                      checked={selected.has(invoice.id)}
+                      onCheckedChange={() => toggleSelect(invoice)}
+                      aria-label={`Select invoice ${invoice.manualInvoiceNo || invoice.invoiceNo}`}
+                    />
+                  </TableCell>
                   <TableCell className="whitespace-nowrap font-medium text-muted-foreground">
                     {new Date(invoice.date).toLocaleDateString()}
                   </TableCell>

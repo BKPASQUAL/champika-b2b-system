@@ -44,6 +44,12 @@ import {
   TableFooter,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -443,22 +449,34 @@ export default function DistributionViewInvoicePage({
               <span className="hidden md:inline">Download</span>
             </Button>
 
-            {/* Print Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-background"
-              onClick={() => printInvoice(id)}
-              disabled={!["Loading", "In Transit", "Delivered"].includes(invoice.orderStatus)}
-              title={
-                !["Loading", "In Transit", "Delivered"].includes(invoice.orderStatus)
-                  ? "Printing is only available once the order reaches Loading, In Transit, or Delivered"
-                  : undefined
-              }
-            >
-              <Printer className="w-4 h-4 md:mr-2 text-muted-foreground" />
-              <span className="hidden md:inline">Print</span>
-            </Button>
+            {/* Print Button — choose Normal price or MRP format */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-background"
+                  disabled={!["Loading", "In Transit", "Delivered"].includes(invoice.orderStatus)}
+                  title={
+                    !["Loading", "In Transit", "Delivered"].includes(invoice.orderStatus)
+                      ? "Printing is only available once the order reaches Loading, In Transit, or Delivered"
+                      : undefined
+                  }
+                >
+                  <Printer className="w-4 h-4 md:mr-2 text-muted-foreground" />
+                  <span className="hidden md:inline">Print</span>
+                  <ChevronDown className="w-3 h-3 ml-1 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => printInvoice(id, "distribution", "STANDARD")}>
+                  <Printer className="w-4 h-4 mr-2" /> Print – Normal Price
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => printInvoice(id, "distribution", "MRP")}>
+                  <Printer className="w-4 h-4 mr-2" /> Print – With MRP
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {/* Share PDF Button */}
             <Button

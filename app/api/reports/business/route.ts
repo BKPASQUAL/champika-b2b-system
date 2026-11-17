@@ -7,6 +7,45 @@ export const dynamic = "force-dynamic";
 
 const marginOf = (profit: number, base: number) => (base > 0 ? (profit / base) * 100 : 0);
 
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const newMonthEntry = (monthKey: string) => {
+  const [y, m] = monthKey.split("-");
+  return {
+    month: monthKey,
+    monthLabel: `${MONTH_NAMES[parseInt(m, 10) - 1]} ${y}`,
+    salesAmount: 0,
+    collectedAmount: 0,
+    dueAmount: 0,
+    invoiceCount: 0,
+    profit: 0,
+    noCostSales: 0,
+    pendingClaimCost: 0,
+    purchaseAmount: 0,
+    purchaseCount: 0,
+    repMap: {} as Record<string, any>,
+  };
+};
+
+/** Adds purchase bill totals into a month map, creating months that only had purchases. */
+const mergePurchases = (
+  monthMap: Record<string, any>,
+  purchasesByMonth: Record<string, { amount: number; count: number }> | undefined
+) => {
+  Object.entries(purchasesByMonth || {}).forEach(([key, p]) => {
+    const e = (monthMap[key] ||= newMonthEntry(key));
+    e.purchaseAmount += p.amount;
+    e.purchaseCount += p.count;
+  });
+};
+
+/** ISO timestamp (from the date filter, Sri Lanka local midnight) → local YYYY-MM-DD. */
+const toLocalDate = (iso: string) => {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso.slice(0, 10);
+  return new Date(d.getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+};
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -489,6 +528,65 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Purchase bills in the period (net of extra discount), grouped by business → month
+    const purchasesByBizMonth: Record<string, Record<string, { amount: number; count: number }>> = {};
+    type SupplierTotal = { id: string; name: string; amount: number; paid: number; count: number };
+    const suppliersByBiz: Record<string, Record<string, SupplierTotal>> = {};
+    /** Supplier purchase totals, largest first. */
+    const supplierList = (maps: Record<string, SupplierTotal>[]) => {
+      const merged: Record<string, SupplierTotal> = {};
+      maps.forEach((m) =>
+        Object.values(m).forEach((s) => {
+          const e = (merged[s.id] ||= { ...s, amount: 0, paid: 0, count: 0 });
+          e.amount += s.amount;
+          e.paid += s.paid;
+          e.count += s.count;
+        })
+      );
+      return Object.values(merged).sort((a, b) => b.amount - a.amount);
+    };
+    {
+      const fromDay = toLocalDate(fromDate);
+      const toDay = toLocalDate(toDate);
+      let pStart = 0;
+      const pLimit = 1000;
+      while (true) {
+        const { data: pBatch, error: pError } = await supabaseAdmin
+          .from("purchases")
+          .select("id, business_id, supplier_id, purchase_date, total_amount, paid_amount, status, suppliers ( name )")
+          .gte("purchase_date", fromDay)
+          .lte("purchase_date", toDay)
+          .neq("status", "Cancelled")
+          .range(pStart, pStart + pLimit - 1);
+        if (pError) throw pError;
+        if (!pBatch || pBatch.length === 0) break;
+        pBatch.forEach((p: any) => {
+          if (!p.business_id || !businessMap[p.business_id] || !p.purchase_date) return;
+          const key = String(p.purchase_date).slice(0, 7);
+          const bizMonths = (purchasesByBizMonth[p.business_id] ||= {});
+          const e = (bizMonths[key] ||= { amount: 0, count: 0 });
+          e.amount += Number(p.total_amount) || 0;
+          e.count += 1;
+
+          const supId = p.supplier_id || "unknown";
+          const bizSup = (suppliersByBiz[p.business_id] ||= {});
+          const s = (bizSup[supId] ||= {
+            id: supId, name: p.suppliers?.name || "Unknown Supplier", amount: 0, paid: 0, count: 0,
+          });
+          s.amount += Number(p.total_amount) || 0;
+          s.paid += Number(p.paid_amount) || 0;
+          s.count += 1;
+        });
+        if (pBatch.length < pLimit) break;
+        pStart += pLimit;
+      }
+    }
+    const sumPurchases = (bizId: string) =>
+      Object.values(purchasesByBizMonth[bizId] || {}).reduce(
+        (s, p) => ({ amount: s.amount + p.amount, count: s.count + p.count }),
+        { amount: 0, count: 0 }
+      );
+
     // Build final list
     const businesses = Object.values(businessMap).map((biz) => {
       const invoices = [...biz.invoiceList].map((inv: any) => {
@@ -589,25 +687,11 @@ export async function GET(request: NextRequest) {
         const monthKey = inv.date.slice(0, 7);
         if (!monthKey || monthKey.length !== 7) return;
 
-        if (!monthMap[monthKey]) {
-          const [y, m] = monthKey.split("-");
-          const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-          const label = `${monthNames[parseInt(m, 10) - 1]} ${y}`;
-          monthMap[monthKey] = {
-            month: monthKey,
-            monthLabel: label,
-            salesAmount: 0,
-            collectedAmount: 0,
-            dueAmount: 0,
-            invoiceCount: 0,
-            profit: 0,
-            noCostSales: 0,
-            repMap: {},
-          };
-        }
+        if (!monthMap[monthKey]) monthMap[monthKey] = newMonthEntry(monthKey);
 
         const mEntry = monthMap[monthKey];
         mEntry.noCostSales += inv.noCostAmount || 0;
+        mEntry.pendingClaimCost += inv.pendingClaimCost || 0;
         const isDue = ["Unpaid", "Partial", "Overdue"].includes(inv.paymentStatus);
         const invDue = isDue ? (Number(inv.due) || 0) : 0;
         const invCollected = Math.max(0, inv.amount - invDue);
@@ -628,8 +712,13 @@ export async function GET(request: NextRequest) {
         if (!inv.isReturn) mEntry.repMap[rName].invoiceCount += 1;
       });
 
+      mergePurchases(monthMap, purchasesByBizMonth[biz.id]);
+      const bizPurchases = sumPurchases(biz.id);
+
       const months = Object.values(monthMap).map((m: any) => ({
         ...m,
+        netProfit: m.profit - m.pendingClaimCost,
+        netMargin: marginOf(m.profit - m.pendingClaimCost, m.salesAmount - m.noCostSales),
         collectionRate: m.salesAmount > 0 ? (m.collectedAmount / m.salesAmount) * 100 : 0,
         margin: marginOf(m.profit, m.salesAmount - m.noCostSales),
         reps: Object.values(m.repMap).sort((a: any, b: any) => b.sales - a.sales),
@@ -656,6 +745,9 @@ export async function GET(request: NextRequest) {
         netMargin: marginOf(netProfit, costedRevenue),
         totalFreeQty: biz.totalFreeQty,
         totalFreeCost: biz.totalFreeCost,
+        totalPurchases: bizPurchases.amount,
+        purchaseCount: bizPurchases.count,
+        suppliers: supplierList([suppliersByBiz[biz.id] || {}]),
         margin: marginOf(totalGrossProfit, costedRevenue),
         noCostSales,
         noCostUnits: biz.noCostUnits,
@@ -767,25 +859,11 @@ export async function GET(request: NextRequest) {
       const monthKey = inv.date.slice(0, 7);
       if (!monthKey || monthKey.length !== 7) return;
 
-      if (!overallMonthsMap[monthKey]) {
-        const [y, m] = monthKey.split("-");
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const label = `${monthNames[parseInt(m, 10) - 1]} ${y}`;
-        overallMonthsMap[monthKey] = {
-          month: monthKey,
-          monthLabel: label,
-          salesAmount: 0,
-          collectedAmount: 0,
-          dueAmount: 0,
-          invoiceCount: 0,
-          profit: 0,
-          noCostSales: 0,
-          repMap: {},
-        };
-      }
+      if (!overallMonthsMap[monthKey]) overallMonthsMap[monthKey] = newMonthEntry(monthKey);
 
       const mEntry = overallMonthsMap[monthKey];
       mEntry.noCostSales += inv.noCostAmount || 0;
+      mEntry.pendingClaimCost += inv.pendingClaimCost || 0;
       const isDue = ["Unpaid", "Partial", "Overdue"].includes(inv.paymentStatus);
       const invDue = isDue ? (Number(inv.due) || 0) : 0;
       const invCollected = Math.max(0, inv.amount - invDue);
@@ -806,8 +884,19 @@ export async function GET(request: NextRequest) {
       if (!inv.isReturn) mEntry.repMap[rName].invoiceCount += 1;
     });
 
+    Object.values(purchasesByBizMonth).forEach((byMonth) => mergePurchases(overallMonthsMap, byMonth));
+    const overallPurchases = Object.keys(purchasesByBizMonth).reduce(
+      (s, id) => {
+        const p = sumPurchases(id);
+        return { amount: s.amount + p.amount, count: s.count + p.count };
+      },
+      { amount: 0, count: 0 }
+    );
+
     const overallMonths = Object.values(overallMonthsMap).map((m: any) => ({
       ...m,
+      netProfit: m.profit - m.pendingClaimCost,
+      netMargin: marginOf(m.profit - m.pendingClaimCost, m.salesAmount - m.noCostSales),
       collectionRate: m.salesAmount > 0 ? (m.collectedAmount / m.salesAmount) * 100 : 0,
       margin: marginOf(m.profit, m.salesAmount - m.noCostSales),
       reps: Object.values(m.repMap).sort((a: any, b: any) => b.sales - a.sales),
@@ -834,6 +923,9 @@ export async function GET(request: NextRequest) {
       netMargin: marginOf(overallNetProfit, overallCostedRevenue),
       totalFreeQty: businesses.reduce((s, b) => s + b.totalFreeQty, 0),
       totalFreeCost: businesses.reduce((s, b) => s + b.totalFreeCost, 0),
+      totalPurchases: overallPurchases.amount,
+      purchaseCount: overallPurchases.count,
+      suppliers: supplierList(Object.values(suppliersByBiz)),
       margin: marginOf(overallTotalGrossProfit, overallCostedRevenue),
       noCostSales: overallNoCostSales,
       noCostUnits: businesses.reduce((s, b) => s + b.noCostUnits, 0),

@@ -43,10 +43,27 @@ const printHTML = (htmlContent: string) => {
   }, 500);
 };
 
+// ── Print format override ───────────────────────────────────────────────────
+// "MRP"      → MRP | Disc % | Unit Price columns
+// "STANDARD" → normal price bill
+// Omitted    → whatever the invoice was saved with
+export type InvoicePrintFormat = "MRP" | "STANDARD";
+
+const applyPrintFormat = (data: any, format?: InvoicePrintFormat) => {
+  if (!format || !data) return data;
+  const notes = String(data.notes || "").replace(/\[PRINT_FORMAT:MRP\]/g, "").trim();
+  return {
+    ...data,
+    printFormat: format,
+    notes: format === "MRP" ? `${notes} [PRINT_FORMAT:MRP]`.trim() : notes,
+  };
+};
+
 // ── Print ───────────────────────────────────────────────────────────────────
 export const printInvoice = async (
   invoiceOrId: string | any,
-  divisionKey: keyof typeof DIVISIONS = "distribution"
+  divisionKey: keyof typeof DIVISIONS = "distribution",
+  format?: InvoicePrintFormat
 ) => {
   try {
     let data = invoiceOrId;
@@ -64,6 +81,7 @@ export const printInvoice = async (
       }
     }
     if (!data) return;
+    data = applyPrintFormat(data, format);
     printHTML(
       getDocumentWrapper(
         await generateInvoiceHTML(data, divisionKey),
@@ -304,6 +322,91 @@ export const shareInvoice = async (
   } catch (err: any) {
     toast.dismiss(tid);
     toast.error("Failed to generate PDF");
+  } finally {
+    onLoadingChange?.(false);
+  }
+};
+
+// ── Share several invoice PDFs at once ──────────────────────────────────────
+// Builds one PDF per invoice and opens the native share sheet with all files.
+// If the browser lost the tap "gesture" while the PDFs were being built
+// (iOS / some Android), a toast button lets the user open the share sheet again.
+// Without the Share API (desktop), each PDF is downloaded.
+export const shareBulkInvoices = async (
+  invoiceIds: string[],
+  divisionKey: keyof typeof DIVISIONS = "distribution",
+  onLoadingChange?: (loading: boolean) => void
+) => {
+  if (!invoiceIds?.length) {
+    toast.error("Select invoices to share");
+    return;
+  }
+  onLoadingChange?.(true);
+  const tid = toast.loading(`Generating ${invoiceIds.length} PDF(s)…`);
+  try {
+    // A few at a time so the server PDF route isn't flooded
+    const results: { blob: Blob; filename: string }[] = [];
+    for (let i = 0; i < invoiceIds.length; i += 4) {
+      const chunk = await Promise.all(
+        invoiceIds.slice(i, i + 4).map((id) => generateInvoicePdfBlob(id, divisionKey))
+      );
+      results.push(...chunk);
+      toast.loading(`Generating PDFs… ${results.length}/${invoiceIds.length}`, { id: tid });
+    }
+    toast.dismiss(tid);
+
+    const files = results.map(
+      ({ blob, filename }) => new File([blob], filename, { type: "application/pdf" })
+    );
+
+    const downloadAll = () => {
+      results.forEach(({ blob, filename }, idx) => {
+        setTimeout(() => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+        }, idx * 300);
+      });
+      toast.success(`${results.length} PDF(s) downloaded`);
+    };
+
+    const canShareFiles = !!navigator.share && (navigator.canShare?.({ files }) ?? false);
+    if (!canShareFiles) {
+      downloadAll();
+      return;
+    }
+
+    const doShare = async () => {
+      await navigator.share({ files, title: `${files.length} Invoices` });
+    };
+
+    try {
+      await doShare();
+    } catch (err: any) {
+      if (err?.name === "AbortError") return; // user cancelled
+      // Gesture lost after the async PDF build — ask for one more tap
+      toast("PDFs ready", {
+        description: `${files.length} invoice PDF(s) ready to share`,
+        duration: 20000,
+        action: {
+          label: "Share",
+          onClick: () => {
+            doShare().catch((e: any) => {
+              if (e?.name !== "AbortError") downloadAll();
+            });
+          },
+        },
+      });
+    }
+  } catch (err) {
+    console.error("shareBulkInvoices error:", err);
+    toast.dismiss(tid);
+    toast.error("Failed to generate invoice PDFs");
   } finally {
     onLoadingChange?.(false);
   }

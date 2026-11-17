@@ -130,6 +130,68 @@ export function filterStatementInvoices(rawInvoices: StatementInvoice[]): Statem
   });
 }
 
+const isReturnedStatus = (s?: string | null) =>
+  ["RETURNED", "BOUNCED"].includes(String(s || "").toUpperCase());
+
+export interface ReturnedChequeSettlement {
+  /** Per returned-cheque payment: how much the customer has paid back and what is still owed */
+  byPayment: Map<InvoicePaymentRecord, { paid: number; balance: number }>;
+  /** Per invoice id: part of the invoice balance that is really unsettled returned cheques */
+  returnedDueByInvoice: Map<string, number>;
+}
+
+/**
+ * A returned cheque is reversed off its invoice, so the invoice balance goes back up.
+ * Whatever the customer pays on that invoice afterwards settles the returned cheques
+ * (oldest first). Once the invoice balance drops, the returned cheques are settled.
+ */
+export function computeReturnedChequeSettlement(rawInvoices: StatementInvoice[]): ReturnedChequeSettlement {
+  const byPayment = new Map<InvoicePaymentRecord, { paid: number; balance: number }>();
+  const returnedDueByInvoice = new Map<string, number>();
+
+  (rawInvoices || []).forEach((inv) => {
+    const returned = (inv.payments || [])
+      .filter((p) => isReturnedStatus(p.chequeStatus))
+      .sort((a, b) =>
+        toDayKey(a.chequeDate || a.paymentDate).localeCompare(toDayKey(b.chequeDate || b.paymentDate))
+      );
+    if (returned.length === 0) return;
+
+    const returnedTotal = returned.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const invBalance = inv.status?.toUpperCase() === "PAID" ? 0 : Math.max(0, Number(inv.balance) || 0);
+    const stillOwed = Math.min(invBalance, returnedTotal);
+    let paidBack = returnedTotal - stillOwed;
+
+    returned.forEach((p) => {
+      const amt = Number(p.amount) || 0;
+      const paid = Math.min(amt, paidBack);
+      paidBack -= paid;
+      byPayment.set(p, { paid, balance: amt - paid });
+    });
+    returnedDueByInvoice.set(inv.id, stillOwed);
+  });
+
+  return { byPayment, returnedDueByInvoice };
+}
+
+/**
+ * Statement bills with the returned-cheque part of each balance taken out — that part
+ * is shown in the "Return Cheques" section instead. Bills whose whole balance is
+ * returned cheques are left out of the bill list.
+ */
+function billsExcludingReturnedCheques(
+  rawInvoices: StatementInvoice[],
+  settlement: ReturnedChequeSettlement
+): StatementInvoice[] {
+  return filterStatementInvoices(rawInvoices).flatMap((inv) => {
+    const returnedDue = settlement.returnedDueByInvoice.get(inv.id) || 0;
+    if (returnedDue <= 0) return [inv];
+    const balance = Math.max(0, inv.balance - returnedDue);
+    if (balance <= 0.009) return [];
+    return [{ ...inv, balance, paidAmount: inv.totalAmount - balance }];
+  });
+}
+
 function parseCompanyAndAgency(companyName: string = "CHAMPIKA HARDWARE") {
   const mainTitle = "CHAMPIKA HARDWARE";
   let subAgency = "";
@@ -161,7 +223,8 @@ export function buildDoc(
   options?: StatementReportOptions
 ): jsPDF {
   const opts = { ...DEFAULT_STATEMENT_OPTIONS, ...(options || {}) };
-  const invoices = filterStatementInvoices(rawInvoices);
+  const settlement = computeReturnedChequeSettlement(rawInvoices);
+  const invoices = billsExcludingReturnedCheques(rawInvoices, settlement);
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -227,17 +290,27 @@ export function buildDoc(
   const totalInvoiced = invoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
   const totalPaid = invoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
   const activeUnpaidCount = invoices.filter((inv) => inv.balance > 0).length;
+  let totalReturnedDue = 0;
+  settlement.byPayment.forEach((v) => (totalReturnedDue += v.balance));
+  const grandTotalDue = totalOutstanding + totalReturnedDue;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(220, 38, 38);
-  doc.text(`Total Due: LKR ${fmt(totalOutstanding)}`, pageWidth - M - 4, cardY + 6, { align: "right" });
+  doc.text(`Total Due: LKR ${fmt(grandTotalDue)}`, pageWidth - M - 4, cardY + 6, { align: "right" });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(...COLOR.mutedText);
   doc.text(`Unpaid / Partial Invoices: ${activeUnpaidCount}`, M + 4, cardY + 12);
-  doc.text(`Total Invoiced: LKR ${fmt(totalInvoiced)} | Paid: LKR ${fmt(totalPaid)}`, pageWidth - M - 4, cardY + 12, { align: "right" });
+  doc.text(
+    totalReturnedDue > 0
+      ? `Bills Due: LKR ${fmt(totalOutstanding)} | Returned Cheques Due: LKR ${fmt(totalReturnedDue)}`
+      : `Total Invoiced: LKR ${fmt(totalInvoiced)} | Paid: LKR ${fmt(totalPaid)}`,
+    pageWidth - M - 4,
+    cardY + 12,
+    { align: "right" }
+  );
 
   const START_Y = cardY + 20;
 
@@ -815,6 +888,9 @@ export function buildDoc(
     date: string;
     chequeNo: string;
     amount: number;
+    /** Returned cheques: amount the customer has paid back / still owes */
+    paid: number;
+    balance: number;
     status: string;
     dayKey: string;
     /** Bill date (day key) for each entry in invoiceNos, same order */
@@ -844,9 +920,14 @@ export function buildDoc(
           const chequeNoStr = rawNo ? `${rawNo.startsWith("#") ? rawNo : `#${rawNo}`}${bankDetail}` : "—";
           const status = (p.chequeStatus || "Pending").toUpperCase();
           const invDisplay = inv.manualInvoiceNo || inv.invoiceNo;
+          const settle = settlement.byPayment.get(p);
+          const paidBack = settle ? settle.paid : 0;
+          const owed = settle ? settle.balance : p.amount;
 
           if (chequeMap.has(chequeKey)) {
             const existing = chequeMap.get(chequeKey)!;
+            existing.paid += paidBack;
+            existing.balance += owed;
             if (invDisplay && !existing.invoiceNos.includes(invDisplay)) {
               existing.invoiceNos.push(invDisplay);
               existing.invoiceDayKeys.push(toDayKey(inv.date));
@@ -866,6 +947,8 @@ export function buildDoc(
               date: pDate,
               chequeNo: chequeNoStr,
               amount: p.amount,
+              paid: paidBack,
+              balance: owed,
               status,
               dayKey: toDayKey(dateToUse),
               invoiceDayKeys: invDisplay ? [toDayKey(inv.date)] : [],
@@ -884,7 +967,8 @@ export function buildDoc(
   chequeMap.forEach((chq) => {
     const s = chq.status.toUpperCase();
     if (["RETURNED", "BOUNCED"].includes(s)) {
-      returnedCheques.push(chq);
+      // Fully paid back by the customer → settled, no longer shown
+      if (chq.balance > 0.009) returnedCheques.push(chq);
     } else if (s === "CLEARED") {
       clearedCheques.push(chq);
     } else if (isTodayOrUpcoming(chq.dayKey)) {
@@ -895,13 +979,113 @@ export function buildDoc(
   pendingCheques.sort((a, b) => a.dayKey.localeCompare(b.dayKey));
 
   const totalPendingAmount = pendingCheques.reduce((sum, c) => sum + c.amount, 0);
+  returnedCheques.sort((a, b) => a.dayKey.localeCompare(b.dayKey));
   const totalReturnedAmount = returnedCheques.reduce((sum, c) => sum + c.amount, 0);
+  const totalReturnedPaid = returnedCheques.reduce((sum, c) => sum + c.paid, 0);
+  const totalReturnedBalance = returnedCheques.reduce((sum, c) => sum + c.balance, 0);
   const totalClearedAmount = clearedCheques.reduce((sum, c) => sum + c.amount, 0);
 
   const lastFinalY = (doc as any).lastAutoTable
     ? (doc as any).lastAutoTable.finalY + 8
     : currentY + 8;
   currentY = goodsBannerBottomY > 0 ? Math.max(lastFinalY, goodsBannerBottomY + 8) : lastFinalY;
+
+  // ── Table 5B: Returned Cheques Details ────────────────────────────────────
+  if (showReturnedCheques && returnedCheques.length > 0) {
+    if (currentY > pageHeight - 45) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(185, 28, 28); // Red-700
+    doc.text("RETURN CHEQUES DETAILS (TO BE SETTLED BY CUSTOMER)", M, currentY);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLOR.mutedText);
+    doc.text(`${returnedCheques.length} returned cheque(s) not settled`, pageWidth - M, currentY, { align: "right" });
+
+    const retTotalStyle: any = {
+      fontStyle: "bold",
+      halign: "right",
+      fillColor: [254, 226, 226], // Red-100
+      textColor: [185, 28, 28], // Red-700
+      fontSize: 8.5,
+    };
+    const returnedTableBody = [
+      ...returnedCheques.map((c) => [
+        c.invoiceNos.join(", ") || "—",
+        c.date,
+        c.chequeNo,
+        fmt(c.amount),
+        c.paid > 0 ? fmt(c.paid) : "—",
+        fmt(c.balance),
+        c.paid > 0 ? "PART PAID" : c.status,
+      ]),
+      [
+        { content: `TOTAL RETURNED CHEQUES TO SETTLE: ${returnedCheques.length}`, colSpan: 3, styles: retTotalStyle },
+        { content: fmt(totalReturnedAmount), styles: retTotalStyle },
+        { content: totalReturnedPaid > 0 ? fmt(totalReturnedPaid) : "—", styles: { ...retTotalStyle, textColor: [22, 101, 52] } },
+        { content: fmt(totalReturnedBalance), styles: retTotalStyle },
+        { content: "", styles: { fillColor: [254, 226, 226] } },
+      ],
+    ];
+
+    autoTable(doc, {
+      startY: currentY + 3.5,
+      margin: { left: M, right: M },
+      head: [["Invoice / Manual Ref", "Date", "Cheque No & Branch", "Cheque Amount", "Paid (LKR)", "Balance to Settle", "Status"]],
+      body: returnedTableBody as any,
+      theme: "plain",
+      headStyles: {
+        fillColor: [185, 28, 28], // Red-700
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 8,
+        halign: "center",
+        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+      },
+      styles: {
+        fontSize: 8,
+        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+        lineColor: COLOR.divider,
+        lineWidth: 0.1,
+        textColor: COLOR.bodyText,
+        overflow: "linebreak",
+      },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 22 },
+        1: { halign: "center", cellWidth: 20 },
+        2: { halign: "left",   cellWidth: 46 },
+        3: { halign: "right",  cellWidth: 24 },
+        4: { halign: "right",  cellWidth: 22 },
+        5: { halign: "right",  cellWidth: 26, fontStyle: "bold" },
+        6: { halign: "center", cellWidth: 20 },
+      },
+      didParseCell(data) {
+        if (data.section !== "body") return;
+        const raw = data.row.raw as any[];
+        if (!raw || raw.length !== 7 || typeof raw[0] !== "string") return;
+
+        // Apply soft red row background for returned cheques to highlight caution
+        data.cell.styles.fillColor = [254, 242, 242];
+        if (data.column.index === 4 && raw[4] !== "—") {
+          data.cell.styles.textColor = [22, 101, 52];
+        }
+        if (data.column.index === 5 || data.column.index === 6) {
+          data.cell.styles.textColor = [185, 28, 28];
+          data.cell.styles.fontStyle = "bold";
+        }
+        if (data.column.index === 6 && raw[6] === "PART PAID") {
+          data.cell.styles.textColor = [180, 83, 9];
+        }
+      },
+    });
+
+    currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : currentY + 35;
+  }
 
   // ── Table 5A: Pending / Deposited Cheques Details ─────────────────────────
   if (showPendingCheques && pendingCheques.length > 0) {
@@ -1015,106 +1199,6 @@ export function buildDoc(
             data.cell.styles.textColor = [29, 78, 216];
             data.cell.styles.fontStyle = "bold";
           }
-        }
-      },
-    });
-
-    currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : currentY + 35;
-  }
-
-  // ── Table 5B: Returned Cheques Details ────────────────────────────────────
-  if (showReturnedCheques && returnedCheques.length > 0) {
-    if (currentY > pageHeight - 45) {
-      doc.addPage();
-      currentY = 20;
-    }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
-    doc.setTextColor(185, 28, 28); // Red-700
-    doc.text("RETURN CHEQUES DETAILS", M, currentY);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(...COLOR.mutedText);
-    doc.text(`${returnedCheques.length} returned cheque(s)`, pageWidth - M, currentY, { align: "right" });
-
-    const returnedTableBody = [
-      ...returnedCheques.map((c) => [
-        c.invoiceNos.join(", ") || "—",
-        c.date,
-        c.chequeNo,
-        fmt(c.amount),
-        c.status,
-      ]),
-      [
-        {
-          content: `TOTAL RETURNED CHEQUES: ${returnedCheques.length}`,
-          colSpan: 3,
-          styles: {
-            fontStyle: "bold",
-            halign: "right",
-            fillColor: [254, 226, 226], // Red-100
-            textColor: [185, 28, 28], // Red-700
-            fontSize: 8.5,
-          },
-        },
-        {
-          content: fmt(totalReturnedAmount),
-          styles: {
-            fontStyle: "bold",
-            halign: "right",
-            fillColor: [254, 226, 226],
-            textColor: [185, 28, 28],
-            fontSize: 8.5,
-          },
-        },
-        {
-          content: "",
-          styles: { fillColor: [254, 226, 226] },
-        },
-      ],
-    ];
-
-    autoTable(doc, {
-      startY: currentY + 3.5,
-      margin: { left: M, right: M },
-      head: [["Invoice / Manual Ref", "Date", "Cheque No & Branch", "Amount (LKR)", "Cheque Status"]],
-      body: returnedTableBody as any,
-      theme: "plain",
-      headStyles: {
-        fillColor: [185, 28, 28], // Red-700
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize: 8.5,
-        halign: "center",
-        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
-      },
-      styles: {
-        fontSize: 8,
-        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
-        lineColor: COLOR.divider,
-        lineWidth: 0.1,
-        textColor: COLOR.bodyText,
-        overflow: "linebreak",
-      },
-      columnStyles: {
-        0: { halign: "center", cellWidth: 28 },
-        1: { halign: "center", cellWidth: 24 },
-        2: { halign: "left",   cellWidth: 64 },
-        3: { halign: "right",  cellWidth: 34, fontStyle: "bold" },
-        4: { halign: "center", cellWidth: 30 },
-      },
-      didParseCell(data) {
-        if (data.section !== "body") return;
-        const raw = data.row.raw as any[];
-        if (!raw || raw.length !== 5 || typeof raw[0] !== "string") return;
-
-        // Apply soft red row background for returned cheques to highlight caution
-        data.cell.styles.fillColor = [254, 242, 242];
-        if (data.column.index === 3 || data.column.index === 4) {
-          data.cell.styles.textColor = [185, 28, 28];
-          data.cell.styles.fontStyle = "bold";
         }
       },
     });
@@ -1303,8 +1387,11 @@ export async function shareCustomerStatement(
     return;
   }
   const opts = { ...DEFAULT_STATEMENT_OPTIONS, ...(options || {}) };
-  const invoices = filterStatementInvoices(rawInvoices);
-  const totalDue = invoices.reduce((sum, i) => sum + i.balance, 0);
+  const settlement = computeReturnedChequeSettlement(rawInvoices);
+  const invoices = billsExcludingReturnedCheques(rawInvoices, settlement);
+  let returnedDue = 0;
+  settlement.byPayment.forEach((v) => (returnedDue += v.balance));
+  const totalDue = invoices.reduce((sum, i) => sum + i.balance, 0) + returnedDue;
 
   const { mainTitle, subAgency } = parseCompanyAndAgency(companyName);
   const agencyLabel = subAgency ? ` (${subAgency})` : "";
@@ -1320,7 +1407,9 @@ export async function shareCustomerStatement(
   let msg = `*${mainTitle}${agencyLabel}*\n`;
   msg += `*${statementTitle} - ${customerName}*\n\n`;
   msg += `*Total Outstanding Balance:* LKR ${fmt(totalDue)}\n`;
-  msg += `*Pending Invoices:* ${invoices.length}\n\n`;
+  msg += `*Pending Invoices:* ${invoices.length}\n`;
+  if (returnedDue > 0) msg += `*Returned Cheques To Settle:* LKR ${fmt(returnedDue)}\n`;
+  msg += `\n`;
 
   if (showInvoices) {
     msg += `*Invoice Breakdown:*\n`;
@@ -1343,7 +1432,7 @@ export async function shareCustomerStatement(
     });
   }
 
-  const groupedChequesMap = new Map<string, { invoiceNos: string[]; date: string; chequeNo: string; amount: number; status: string; dayKey: string }>();
+  const groupedChequesMap = new Map<string, { invoiceNos: string[]; date: string; chequeNo: string; amount: number; paid: number; balance: number; status: string; dayKey: string }>();
 
   rawInvoices.forEach((inv) => {
     if (inv.payments && inv.payments.length > 0) {
@@ -1357,9 +1446,14 @@ export async function shareCustomerStatement(
           const chequeDisplay = rawNo ? `${rawNo}${bankDetail}` : "N/A";
           const status = (p.chequeStatus || "Pending").toUpperCase();
           const invDisplay = inv.manualInvoiceNo || inv.invoiceNo;
+          const settle = settlement.byPayment.get(p);
+          const paidBack = settle ? settle.paid : 0;
+          const owed = settle ? settle.balance : p.amount;
 
           if (groupedChequesMap.has(key)) {
             const ext = groupedChequesMap.get(key)!;
+            ext.paid += paidBack;
+            ext.balance += owed;
             if (invDisplay && !ext.invoiceNos.includes(invDisplay)) {
               ext.invoiceNos.push(invDisplay);
             }
@@ -1374,6 +1468,8 @@ export async function shareCustomerStatement(
               date: pDate,
               chequeNo: chequeDisplay,
               amount: p.amount,
+              paid: paidBack,
+              balance: owed,
               status,
               dayKey: toDayKey(dateToUse),
             });
@@ -1396,7 +1492,14 @@ export async function shareCustomerStatement(
     const invList = chq.invoiceNos.join(", ") || "—";
     const line = `• Cheque #${chq.chequeNo} (Invoices: ${invList}): LKR ${fmt(chq.amount)} (${chq.date}) [${s}]`;
     if (["RETURNED", "BOUNCED"].includes(s)) {
-      returnedWaCheques.push(line);
+      // Settled (fully paid back) returned cheques are not listed
+      if (chq.balance > 0.009) {
+        returnedWaCheques.push(
+          chq.paid > 0
+            ? `• Cheque #${chq.chequeNo} (Invoices: ${invList}): LKR ${fmt(chq.amount)} (${chq.date}) — Paid LKR ${fmt(chq.paid)}, *Balance LKR ${fmt(chq.balance)}*`
+            : line
+        );
+      }
     } else if (s === "CLEARED") {
       clearedWaCheques.push(line);
     } else if (isTodayOrUpcoming(chq.dayKey)) {
@@ -1404,16 +1507,16 @@ export async function shareCustomerStatement(
     }
   });
 
-  if (showPendingCheques && pendingWaCheques.length > 0) {
-    msg += `\n*PENDING CHEQUES DETAILS (${pendingWaCheques.length}):*\n`;
-    pendingWaCheques.forEach((chq) => {
+  if (showReturnedCheques && returnedWaCheques.length > 0) {
+    msg += `\n*RETURN CHEQUES DETAILS (${returnedWaCheques.length}):*\n`;
+    returnedWaCheques.forEach((chq) => {
       msg += `${chq}\n`;
     });
   }
 
-  if (showReturnedCheques && returnedWaCheques.length > 0) {
-    msg += `\n*RETURN CHEQUES DETAILS (${returnedWaCheques.length}):*\n`;
-    returnedWaCheques.forEach((chq) => {
+  if (showPendingCheques && pendingWaCheques.length > 0) {
+    msg += `\n*PENDING CHEQUES DETAILS (${pendingWaCheques.length}):*\n`;
+    pendingWaCheques.forEach((chq) => {
       msg += `${chq}\n`;
     });
   }
