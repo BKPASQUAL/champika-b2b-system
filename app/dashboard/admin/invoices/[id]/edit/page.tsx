@@ -450,6 +450,7 @@ export default function EditInvoicePage({
       userId: userId,
       changeReason:
         editReason || (asDraft ? "Saved as Draft" : "Updated Invoice"),
+      fromReconciliation: isFromReconciliation,
     };
 
     try {

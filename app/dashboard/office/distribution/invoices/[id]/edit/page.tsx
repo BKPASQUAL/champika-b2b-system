@@ -275,6 +275,8 @@ export default function DistributionEditInvoicePage({
   const isAdmin = currentUserRole === "admin";
   const isUnlockedByToken = !!unlockedToken;
   const isReadOnly = isStatusLocked && !isFromReconciliation && !isAdmin && !isUnlockedByToken;
+  // Overdue-customer block does not apply to corrections made from Reconcile Delivery
+  const isOverdueBlocked = !!customerOverdueStatus?.isBlocked && !isFromReconciliation;
 
   const handleBack = () => {
     if (returnTo) {
@@ -815,7 +817,7 @@ export default function DistributionEditInvoicePage({
       toast.error("This invoice is locked and cannot be edited.");
       return;
     }
-    if (customerOverdueStatus?.isBlocked) {
+    if (isOverdueBlocked) {
       toast.error(
         customerOverdueStatus.blockReason ||
           "This customer has unpaid invoices overdue by 60+ days. Invoice update is blocked until settled or unlocked by Admin."
@@ -856,6 +858,7 @@ export default function DistributionEditInvoicePage({
       userId,
       changeReason: editReason || (asDraft ? "Saved as Draft" : "Updated Invoice"),
       unlockToken: unlockedToken || undefined,
+      fromReconciliation: isFromReconciliation,
     };
 
     try {
@@ -971,7 +974,7 @@ export default function DistributionEditInvoicePage({
             </SheetContent>
           </Sheet>
 
-          {!isReadOnly && !customerOverdueStatus?.isBlocked && (
+          {!isReadOnly && !isOverdueBlocked && (
             <>
               <Button
                 variant="secondary"
@@ -1261,7 +1264,7 @@ export default function DistributionEditInvoicePage({
           </Card>
 
           {/* If customer is blocked due to 60+ days overdue bills, HIDE product selection and invoice editing UI */}
-          {customerOverdueStatus?.isBlocked ? (
+          {isOverdueBlocked ? (
             <Card className="border-2 border-dashed border-red-300 bg-red-50/20 p-8 text-center rounded-2xl shadow-sm">
               <div className="flex flex-col items-center justify-center max-w-lg mx-auto space-y-3 py-6">
                 <div className="p-4 bg-red-100 text-red-700 rounded-2xl shadow-inner">
@@ -1654,7 +1657,7 @@ export default function DistributionEditInvoicePage({
 
         {/* RIGHT COLUMN */}
         <div className="lg:col-span-1">
-          {customerOverdueStatus?.isBlocked ? (
+          {isOverdueBlocked ? (
             <Card className="border-red-200 bg-red-50/20 p-6 text-center space-y-3 sticky top-6">
               <div className="p-3 bg-red-100 text-red-700 rounded-full w-fit mx-auto">
                 <Lock className="w-5 h-5" />

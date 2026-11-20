@@ -451,8 +451,12 @@ export async function PATCH(
       body.source === "rep" ||
       (!invoiceBusinessId && Boolean(val.salesRepId || currentInvoice.sales_rep_id));
 
+    // Edits made while reconciling a delivery (bill already dispatched) are corrections,
+    // not new credit — office users must be able to save them even for blocked customers.
+    const isReconciliationEdit = body.fromReconciliation === true;
+
     let overdueStatus: any = null;
-    if (isDistribution || isRepPortal) {
+    if ((isDistribution || isRepPortal) && !isReconciliationEdit) {
       const requesterUserId = val.salesRepId || body.userId || body.performedById || null;
       overdueStatus = await checkCustomerOverdueStatus(val.customerId, {
         userId: requesterUserId,

@@ -567,6 +567,7 @@ export default function OrangeEditInvoicePage({
           userId, changeReason: editReason || "Updated Invoice",
           manual_invoice_no: manualInvoiceNo,
           unlockToken: unlockedToken || undefined,
+          fromReconciliation: isFromReconciliation,
         }),
       });
       if (!res.ok) {
