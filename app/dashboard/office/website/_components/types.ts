@@ -68,6 +68,8 @@ export type WebProduct = {
   sortOrder: number;
   orderType?: "normal" | "special" | "cut";
   leadTime?: string | null;
+  warrantyPeriod?: string | null;
+  warrantyTerms?: string | null;
   options: { name: string; values: string[] }[];
   variants: WebVariant[];
   summary: {

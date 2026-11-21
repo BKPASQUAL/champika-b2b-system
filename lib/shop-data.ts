@@ -62,6 +62,8 @@ export type ShopProduct = ShopProductCard & {
   shortDescription: string | null;
   description: string | null;
   specs: { label: string; value: string }[];
+  /** Optional warranty set by the office; null = none shown. */
+  warranty: { period: string; terms: string | null } | null;
   images: string[];
   category: { name: string; slug: string } | null;
   subCategory: { name: string; slug: string } | null;
@@ -371,6 +373,7 @@ export const getProductBySlug = cache(async (slug: string): Promise<ShopProduct 
     shortDescription: row.short_description,
     description: row.description,
     specs: (Array.isArray(row.specs) ? row.specs : []).filter((s: any) => s?.label && s?.value),
+    warranty: row.warranty_period ? { period: row.warranty_period as string, terms: (row.warranty_terms as string | null) || null } : null,
     images,
     category: row.category,
     subCategory: row.sub_category,
@@ -381,20 +384,25 @@ export const getProductBySlug = cache(async (slug: string): Promise<ShopProduct 
 });
 
 const cachedProductBySlug = shopCached(async (slug: string): Promise<any | null> => {
-  const { data: p } = await supabaseAdmin
-    .from("web_products")
-    .select(
-      CARD_SELECT +
-        ", short_description, description, specs, " +
-        "category:web_categories!web_products_web_category_id_fkey(name, slug), " +
-        "sub_category:web_categories!web_products_web_sub_category_id_fkey(name, slug), " +
-        "family:web_product_families(id, name), " +
-        "brand_info:web_brands!web_products_web_brand_id_fkey(name, slug), " +
-        "sub_brand_info:web_brands!web_products_web_sub_brand_id_fkey(name, slug)",
-    )
-    .eq("slug", slug)
-    .eq("is_published", true)
-    .maybeSingle();
+  const query = (extra: string) =>
+    supabaseAdmin
+      .from("web_products")
+      .select(
+        CARD_SELECT +
+          ", short_description, description, specs, " +
+          extra +
+          "category:web_categories!web_products_web_category_id_fkey(name, slug), " +
+          "sub_category:web_categories!web_products_web_sub_category_id_fkey(name, slug), " +
+          "family:web_product_families(id, name), " +
+          "brand_info:web_brands!web_products_web_brand_id_fkey(name, slug), " +
+          "sub_brand_info:web_brands!web_products_web_sub_brand_id_fkey(name, slug)",
+      )
+      .eq("slug", slug)
+      .eq("is_published", true)
+      .maybeSingle();
+  let { data: p, error } = await query("warranty_period, warranty_terms, ");
+  // Warranty columns not added yet (SQL not run) → load the product without them.
+  if (error && /warranty_/.test(error.message || "")) ({ data: p } = await query(""));
   return p ?? null;
 }, "product-by-slug");
 

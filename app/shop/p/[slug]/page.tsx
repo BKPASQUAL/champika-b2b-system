@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeftRight, ChevronRight, MessageCircle, ShieldCheck, Truck, Wallet } from "lucide-react";
+import { ArrowLeftRight, BadgeCheck, ChevronRight, MessageCircle, ShieldCheck, Truck, Wallet } from "lucide-react";
 import { getProductBySlug, getRelatedProducts, getShopBase, getStoreInfo } from "@/lib/shop-data";
 import { brandLabelFor, getAlternatives } from "@/lib/web-compare";
 import { SHOP_URL } from "@/lib/shop-host";
@@ -67,13 +67,17 @@ export default async function ProductPage({ params }: Props) {
   ].filter(Boolean) as { label: string; href: string }[];
 
   // Specifications entered by the office; otherwise the basics we already know.
-  const specs = p.specs.length
+  const baseSpecs = p.specs.length
     ? p.specs
     : ([
         p.brandInfo && { label: "Brand", value: p.subBrandInfo ? `${p.brandInfo.name} · ${p.subBrandInfo.name}` : p.brandInfo.name },
         p.subCategory && { label: "Category", value: p.subCategory.name },
         p.family && { label: "Type", value: p.family.name },
       ].filter(Boolean) as { label: string; value: string }[]);
+  const specs =
+    p.warranty && !baseSpecs.some((s) => /warrant/i.test(s.label))
+      ? [...baseSpecs, { label: "Warranty", value: p.warranty.period }]
+      : baseSpecs;
 
   const trust = [
     { icon: ShieldCheck, title: "Genuine product", text: "Original stock from authorised dealers" },
@@ -155,6 +159,26 @@ export default async function ProductPage({ params }: Props) {
           {p.kind !== "normal" && (
             <div className="mt-4">
               <ItemKindNote kind={p.kind} leadTime={p.leadTime} itemName={p.name} />
+            </div>
+          )}
+
+          {p.warranty && (
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+              <div className="flex items-center gap-2.5">
+                <BadgeCheck className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-sm font-semibold text-(--s-ink)">{p.warranty.period} warranty</span>
+              </div>
+              {p.warranty.terms && (
+                <details className="group mt-1.5 pl-7.5">
+                  <summary className="cursor-pointer list-none text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+                    <span className="group-open:hidden">View warranty terms</span>
+                    <span className="hidden group-open:inline">Hide warranty terms</span>
+                  </summary>
+                  <div className="mt-2 text-sm [&_div]:text-sm [&_div]:leading-6">
+                    <Description text={p.warranty.terms} />
+                  </div>
+                </details>
+              )}
             </div>
           )}
 

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="312 192 400 340" width="400" height="340">
+  <defs>
+    <radialGradient id="bkl-bg" cx="50%" cy="42%" r="60%">
+      <stop offset="0%" stop-color="#1f2b45" />
+      <stop offset="70%" stop-color="#131c30" />
+      <stop offset="100%" stop-color="#0c1322" />
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect x="312" y="192" width="400" height="340" rx="48" fill="url(#bkl-bg)" />
+
+  <!-- House mark -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Roof + walls -->
+    <path d="M368 352 L512 240 L656 352" stroke="#38aef0" stroke-width="22" />
+    <path d="M584 296 V256" stroke="#38aef0" stroke-width="22" />
+    <path d="M410 340 V436" stroke="#38aef0" stroke-width="20" />
+    <path d="M614 340 V430" stroke="#38aef0" stroke-width="20" />
+
+    <!-- B -->
+    <path d="M442 378 V446" stroke="#38aef0" stroke-width="15" />
+    <path d="M430 378 H476 a17 17 0 0 1 0 34 H442" stroke="#38aef0" stroke-width="15" />
+    <path d="M442 412 H480 a17 17 0 0 1 0 34 H428" stroke="#38aef0" stroke-width="15" />
+
+    <!-- K -->
+    <path d="M522 286 V446" stroke="#38aef0" stroke-width="15" />
+    <path d="M578 372 L526 410 L582 446" stroke="#38aef0" stroke-width="15" />
+
+    <!-- Orange cord -->
+    <path d="M410 436 Q410 470 444 470 H566" stroke="#f28a2e" stroke-width="14" />
+  </g>
+
+  <!-- Plug -->
+  <g fill="#f28a2e">
+    <path d="M560 452 H584 a14 14 0 0 1 14 14 V474 a14 14 0 0 1 -14 14 H560 Z" />
+    <rect x="596" y="456" width="30" height="9" rx="4.5" />
+    <rect x="596" y="475" width="30" height="9" rx="4.5" />
+  </g>
+
+</svg>

@@ -577,3 +577,11 @@ DO $$ BEGIN
     ALTER TABLE web_orders ADD CONSTRAINT web_orders_advance_status_check CHECK (advance_status IN ('none','requested','slip_uploaded','paid'));
   END IF;
 END $$;
+
+-- ============================================================================
+-- 15. Warranty (optional, per product)
+--   Empty warranty_period = no warranty shown. Reusable presets live in
+--   web_settings (key 'warranties') and are copied onto the product.
+-- ============================================================================
+ALTER TABLE web_products ADD COLUMN IF NOT EXISTS warranty_period TEXT;
+ALTER TABLE web_products ADD COLUMN IF NOT EXISTS warranty_terms  TEXT;

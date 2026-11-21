@@ -236,7 +236,12 @@ export const generateInvoiceHTML = async (
     .replace(/\[CASH_DISCOUNT_AMOUNT:[\d.]+\]/g, "")
     .trim();
 
-  const returnsTotal = Number(invoice.returnsTotal || invoice.totalRefunded || 0);
+  // Only retail walk-in Good Returns are deducted on the printed bill. Agency /
+  // distribution returns are credited to the customer separately, so the bill
+  // just shows Subtotal → Net Total.
+  const returnsTotal = divisionKey === "retail" && walkInReturnsOf(invoice).length > 0
+    ? Number(invoice.returnsTotal || invoice.totalRefunded || 0)
+    : 0;
   const subTotal    = items.reduce((s: number, i: any) => s + (i.total || 0), 0);
   const grandTotal  = invoice.grandTotal || invoice.totalAmount || 0;
   const extraDiscount = Math.max(0, subTotal - grandTotal - cashDiscountAmount - returnsTotal);
@@ -624,7 +629,7 @@ export const generateInvoiceHTML = async (
               <td style="padding:5px 0;font-size:12px;color:#000;text-align:right;white-space:nowrap;">LKR ${fmt(subTotal)}</td>
             </tr>
             ${returnsTotal > 0 ? `<tr>
-              <td style="padding:5px 0;font-size:12px;color:#c00;">${divisionKey === "retail" && walkInReturnsOf(invoice).length > 0 ? "Good Returns" : "Returns &amp; Adjustments"}</td>
+              <td style="padding:5px 0;font-size:12px;color:#c00;">Good Returns</td>
               <td style="padding:5px 0;font-size:12px;color:#c00;text-align:right;white-space:nowrap;">- LKR ${fmt(returnsTotal)}</td>
             </tr>` : ""}
             ${extraDiscount > 1 ? `<tr>

@@ -19,6 +19,7 @@ import { ImageUploader } from "../../_components/ImageUploader";
 import { MainProduct, MainProductPicker } from "../../_components/MainProductSearch";
 import type { WebBrand, WebCategory, WebFamily, WebProduct, WebSupplier } from "../../_components/types";
 import { TaxonomyField } from "../../_components/TaxonomyField";
+import { WarrantyCard } from "../../_components/WarrantyCard";
 import { suggestSizeTags } from "@/lib/web-search";
 import { detectBrand } from "@/lib/web-brand-detect";
 import { suggestSpecs } from "@/lib/web-specs";
@@ -47,6 +48,8 @@ type Draft = {
   sortOrder: number;
   orderType: "normal" | "special" | "cut";
   leadTime: string;
+  warrantyPeriod: string;
+  warrantyTerms: string;
   // sale info
   productId: string;
   linked: MainProduct | null;
@@ -60,6 +63,7 @@ const emptyDraft: Draft = {
   name: "", shortDescription: "", description: "", specs: [], webCategoryId: null, webSubCategoryId: null, webFamilyId: null,
   extraCategoryIds: [], tags: [], brandText: "", webBrandId: null, webSubBrandId: null, webSupplierId: null,
   images: [], isPublished: false, isFeatured: false, sortOrder: 0, orderType: "normal", leadTime: "",
+  warrantyPeriod: "", warrantyTerms: "",
   productId: "", linked: null, mrp: "", webPrice: "", tradePrice: "", isAvailable: true,
 };
 
@@ -117,6 +121,8 @@ export default function WebsiteProductEditor() {
             sortOrder: p.sortOrder,
             orderType: p.orderType || "normal",
             leadTime: p.leadTime || "",
+            warrantyPeriod: p.warrantyPeriod || "",
+            warrantyTerms: p.warrantyTerms || "",
             productId: v?.productId || "",
             linked: v
               ? {
@@ -229,6 +235,8 @@ export default function WebsiteProductEditor() {
         sortOrder: d.sortOrder,
         orderType: d.orderType,
         leadTime: d.leadTime,
+        warrantyPeriod: d.warrantyPeriod,
+        warrantyTerms: d.warrantyTerms,
         productId: d.productId,
         variantId: d.variantId,
         mrp: d.mrp,
@@ -423,6 +431,9 @@ export default function WebsiteProductEditor() {
               )}
             </CardContent>
           </Card>
+
+          {/* ── Warranty (optional) ── */}
+          <WarrantyCard period={d.warrantyPeriod} terms={d.warrantyTerms} onChange={set} />
 
           <Card>
             <CardHeader><CardTitle className="text-base">Product page</CardTitle></CardHeader>

@@ -36,6 +36,9 @@ const productSchema = z.object({
   /** normal · special (ordered from the supplier for the customer) · cut (cut to length). */
   orderType: z.enum(["normal", "special", "cut"]).default("normal"),
   leadTime: z.string().trim().max(60).nullish(),
+  /** Optional warranty; empty period = no warranty shown on the shop. */
+  warrantyPeriod: z.string().trim().max(60).nullish(),
+  warrantyTerms: z.string().trim().max(2000).nullish(),
   sortOrder: z.coerce.number().int().default(0),
   productId: z.string().uuid({ message: "Link a main product" }),
   mrp: numOrNull,
@@ -171,6 +174,8 @@ export async function GET(request: NextRequest) {
         sortOrder: p.sort_order,
         orderType: (p.order_type as string) || "normal",
         leadTime: (p.lead_time as string | null) ?? null,
+        warrantyPeriod: (p.warranty_period as string | null) ?? null,
+        warrantyTerms: (p.warranty_terms as string | null) ?? null,
         options: opts.map((o: any) => ({ name: o.name, values: o.values || [] })),
         variants: vs,
         summary: {
@@ -254,8 +259,14 @@ export async function POST(request: NextRequest) {
         .select()
         .single();
     const kind = { order_type: v.orderType, lead_time: v.orderType === "special" ? v.leadTime || null : null };
-    let { data: saved, error } = await write({ ...row, ...kind, search_key: searchText });
+    const warrantyPeriod = v.warrantyPeriod || null;
+    const warranty = { warranty_period: warrantyPeriod, warranty_terms: warrantyPeriod ? v.warrantyTerms || null : null };
+    let { data: saved, error } = await write({ ...row, ...kind, ...warranty, search_key: searchText });
     // Newer columns not added yet (SQL not run) → save without them.
+    if (error && /warranty_/.test(error.message || "")) {
+      if (warrantyPeriod) throw new Error("Warranty columns are missing — run add-web-product-warranty.sql in Supabase first");
+      ({ data: saved, error } = await write({ ...row, ...kind, search_key: searchText }));
+    }
     if (error && /order_type|lead_time/.test(error.message || "")) ({ data: saved, error } = await write({ ...row, search_key: searchText }));
     if (error && /search_key/.test(error.message || "")) ({ data: saved, error } = await write(row));
     if (error) throw error;
