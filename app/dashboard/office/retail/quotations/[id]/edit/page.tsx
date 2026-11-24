@@ -50,7 +50,9 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
-import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
+import { BUSINESS_NAMES } from "@/app/config/business-constants";
+import { useQuotationPortal } from "../../_portal";
+import { NewCustomerButton } from "../../_NewCustomerButton";
 
 interface Product {
   id: string;
@@ -105,6 +107,7 @@ interface CurrentItemState {
 export default function EditQuotationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const qp = useQuotationPortal();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -144,12 +147,12 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
         const user = getUserBusinessContext();
         if (!user) { router.push("/login"); return; }
 
-        setBusinessName(user.businessName ?? BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL]);
+        setBusinessName(user.businessName ?? (BUSINESS_NAMES as Record<string, string>)[qp.businessId]);
         setUserId(user.id);
 
         const [quotationRes, customersRes, productsRes] = await Promise.all([
           fetch(`/api/quotations/${id}`),
-          fetch(`/api/customers?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}`),
+          fetch(`/api/customers?businessId=${qp.businessId}`),
           fetch(`/api/products?active=true`),
         ]);
 
@@ -158,7 +161,7 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
 
         if (q.status === "Converted") {
           toast.error("Cannot edit a converted quotation");
-          router.push(`/dashboard/office/retail/quotations/${id}`);
+          router.push(`${qp.basePath}/${id}`);
           return;
         }
 
@@ -179,7 +182,7 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
         const productsData = await productsRes.json();
 
         const retailCustomers = (customersData || []).filter(
-          (c: any) => c.business_id === BUSINESS_IDS.CHAMPIKA_RETAIL || c.businessId === BUSINESS_IDS.CHAMPIKA_RETAIL
+          (c: any) => c.business_id === qp.businessId || c.businessId === qp.businessId
         );
 
         const guest = retailCustomers.find((c: any) => {
@@ -211,7 +214,7 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
         }
       } catch (err: any) {
         toast.error(err.message || "Failed to load quotation");
-        router.push("/dashboard/office/retail/quotations");
+        router.push(qp.basePath);
       } finally {
         setLoading(false);
       }
@@ -317,7 +320,7 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
 
       toast.success("Quotation updated!");
       
-      let redirect = `/dashboard/office/retail/quotations/${id}`;
+      let redirect = `${qp.basePath}/${id}`;
       if (action === "print") {
         redirect += "?print=true";
       } else if (action === "download") {
@@ -362,7 +365,7 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
     <div className="space-y-4 pb-28 xl:pb-6 mx-auto">
       {/* Desktop header */}
       <div className="hidden xl:flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.push(`/dashboard/office/retail/quotations/${id}`)}>
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.push(`${qp.basePath}/${id}`)}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1 min-w-0">
@@ -406,7 +409,7 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
           {/* Details */}
           <Card>
             <CardHeader className="pb-0 flex flex-row items-center gap-3">
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 xl:hidden" onClick={() => router.push(`/dashboard/office/retail/quotations/${id}`)}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 xl:hidden" onClick={() => router.push(`${qp.basePath}/${id}`)}>
                 <ArrowLeft className="w-4 h-4 text-slate-500" />
               </Button>
               <div className="flex-1">
@@ -423,6 +426,12 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
                       <Button variant="secondary" size="sm" className="h-6 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200" onClick={() => { setCustomerId(guestCustomerId); setCustomerOpen(false); toast.success("Selected Walk-in Customer"); }}>
                         Walk-in / Guest
                       </Button>
+                    )}
+                    {qp.allowNewCustomer && (
+                      <NewCustomerButton
+                        businessId={qp.businessId}
+                        onCreated={(c) => { setCustomers((prev) => [...prev, { ...c, owner_name: c.owner_name || "" }]); setCustomerId(c.id); }}
+                      />
                     )}
                   </div>
                   <Popover open={customerOpen} onOpenChange={setCustomerOpen}>

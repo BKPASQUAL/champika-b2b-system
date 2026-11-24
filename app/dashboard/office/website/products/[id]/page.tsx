@@ -433,7 +433,14 @@ export default function WebsiteProductEditor() {
           </Card>
 
           {/* ── Warranty (optional) ── */}
-          <WarrantyCard period={d.warrantyPeriod} terms={d.warrantyTerms} onChange={set} />
+          <WarrantyCard
+            period={d.warrantyPeriod}
+            terms={d.warrantyTerms}
+            brandId={d.webBrandId}
+            subBrandId={d.webSubBrandId}
+            brands={brands}
+            onChange={set}
+          />
 
           <Card>
             <CardHeader><CardTitle className="text-base">Product page</CardTitle></CardHeader>
@@ -452,7 +459,7 @@ export default function WebsiteProductEditor() {
               </div>
               <div className="space-y-1">
                 <Label>Images (first = main)</Label>
-                <ImageUploader max={10} value={d.images} onChange={(images) => set({ images })} />
+                <ImageUploader crop max={10} value={d.images} onChange={(images) => set({ images })} />
               </div>
             </CardContent>
           </Card>

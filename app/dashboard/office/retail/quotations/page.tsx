@@ -32,13 +32,14 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { useQuotationPortal } from "./_portal";
 import { TablePagination } from "@/components/ui/TablePagination";
 
 const ITEMS_PER_PAGE = 15;
 
 export default function QuotationsListPage() {
   const router = useRouter();
+  const qp = useQuotationPortal();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -47,7 +48,7 @@ export default function QuotationsListPage() {
     loading,
     refetch,
   } = useCachedFetch<any[]>(
-    `/api/quotations?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}`,
+    `/api/quotations?businessId=${qp.businessId}`,
     [],
     () => toast.error("Failed to load quotations")
   );
@@ -102,9 +103,9 @@ export default function QuotationsListPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-green-950">Quotations</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-green-950">{qp.title}</h1>
           <p className="text-muted-foreground mt-1">
-            Create and manage retail quotations — convert to invoice when ready.
+            {qp.subtitle}
           </p>
         </div>
         <div className="flex gap-2">
@@ -113,7 +114,7 @@ export default function QuotationsListPage() {
           </Button>
           <Button
             className="bg-green-600 hover:bg-green-700"
-            onClick={() => router.push("/dashboard/office/retail/quotations/create")}
+            onClick={() => router.push(`${qp.basePath}/create`)}
           >
             <Plus className="w-4 h-4 mr-2" /> New Quotation
           </Button>
@@ -213,7 +214,7 @@ export default function QuotationsListPage() {
                     <TableRow
                       key={q.id}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => router.push(`/dashboard/office/retail/quotations/${q.id}`)}
+                      onClick={() => router.push(`${qp.basePath}/${q.id}`)}
                     >
                       <TableCell className="font-mono font-semibold text-green-700">
                         {q.quotationNo}

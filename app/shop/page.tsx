@@ -375,7 +375,7 @@ export default async function ShopHome() {
           <section className={wrap}>
             <ScrollRow title={t("New arrivals")} href={`${base}/products?sort=newest`}>
               {newest.slice(0, 16).map((p) => (
-                <div key={p.id} className="w-[46%] shrink-0 snap-start sm:w-[220px] xl:w-[240px]">
+                <div key={p.id} className="flex w-[46%] shrink-0 snap-start sm:w-[220px] xl:w-[240px] [&>*]:w-full">
                   <ProductCard p={p} base={base} />
                 </div>
               ))}

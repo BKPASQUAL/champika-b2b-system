@@ -205,10 +205,21 @@ export const shareQuotation = async (
   divisionKey: keyof typeof DIVISIONS = "retail",
   quotationNo: string,
   onLoadingChange?: (loading: boolean) => void,
-  showBranding: boolean = true
+  showBranding: boolean = true,
+  /** Text sent with the PDF (e.g. WhatsApp caption with the total). */
+  message?: string
 ) => {
   onLoadingChange?.(true);
   const tid = toast.loading("Generating PDF…");
+  const copyMessage = async () => {
+    if (!message) return false;
+    try {
+      await navigator.clipboard.writeText(message);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   try {
     const { blob, filename } = await generateQuotationPdfBlob(id, divisionKey, showBranding);
     toast.dismiss(tid);
@@ -223,7 +234,7 @@ export const shareQuotation = async (
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-      toast.success("PDF downloaded");
+      toast.success((await copyMessage()) ? "PDF downloaded · message with the total copied — paste it in WhatsApp" : "PDF downloaded");
       return;
     }
 
@@ -232,16 +243,17 @@ export const shareQuotation = async (
 
     try {
       if (canShareFile) {
-        await navigator.share({ files: [file], title: filename });
+        await navigator.share({ files: [file], title: filename, ...(message ? { text: message } : {}) });
       } else {
-        await navigator.share({ title: filename, text: `Quotation ${quotationNo}` });
+        await navigator.share({ title: filename, text: message || `Quotation ${quotationNo}` });
       }
     } catch (shareErr: any) {
       if (shareErr?.name === "AbortError") return;
       const blobUrl = URL.createObjectURL(blob);
       window.open(blobUrl, "_blank");
       setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-      toast.info("PDF opened — use your browser's share button to send it");
+      const copied = await copyMessage();
+      toast.info(copied ? "PDF opened — message with the total copied, paste it when you send" : "PDF opened — use your browser's share button to send it");
     }
   } catch (err: any) {
     toast.dismiss(tid);

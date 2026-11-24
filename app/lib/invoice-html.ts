@@ -136,7 +136,21 @@ export interface DivisionConfig {
   division: string;
   address: string;
   tel: string;
+  /** Header name; defaults to CHAMPIKA HARDWARE. */
+  brand?: string;
+  /** Logo path under /public, shown left of the name instead of the "26 years" badge. */
+  logo?: string;
 }
+
+/** Header brand name for a division. */
+export const brandNameOf = (cfg: DivisionConfig) => cfg.brand ?? "CHAMPIKA HARDWARE";
+
+/** Logo <img> floated left of the header name (empty when the division has no logo). */
+export const brandLogoHTML = (cfg: DivisionConfig, baseUrl: string, size: number) => {
+  if (!cfg.logo) return "";
+  const origin = baseUrl || (typeof window !== "undefined" ? window.location.origin : "");
+  return `<img src="${origin}${cfg.logo}" alt="" style="float:left;width:${size}px;height:${size}px;border-radius:${Math.round(size / 5)}px;margin-right:${Math.round(size / 5)}px;object-fit:cover;" />`;
+};
 
 export const DIVISIONS: Record<string, DivisionConfig> = {
   distribution: { division: "Distribution Division", address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
@@ -144,6 +158,7 @@ export const DIVISIONS: Record<string, DivisionConfig> = {
   orange:       { division: "Orange Agency",          address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
   sierra:       { division: "Sierra Division",        address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
   wireman:      { division: "Wireman Division",       address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
+  website:      { division: "bkwiringbadukade.lk",    address: "Pranawatta Road, Wallabada, Boossa", tel: "076-2873921", brand: "BK WIRING BADUKADE", logo: "/bk-wiring-logo.png" },
   admin:        { division: "Head Office",            address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
 };
 
@@ -476,7 +491,7 @@ export const generateInvoiceHTML = async (
     <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
       <tr>
         <td style="vertical-align:top;width:55%;">
-          <div style="font-size:34px;font-weight:900;color:#000;letter-spacing:-0.5px;line-height:1.1;white-space:nowrap;">CHAMPIKA HARDWARE</div>
+          ${brandLogoHTML(cfg, baseUrl, 60)}<div style="font-size:34px;font-weight:900;color:#000;letter-spacing:-0.5px;line-height:1.1;white-space:nowrap;">${brandNameOf(cfg)}</div>
           ${isReturnNote ? `
           <div style="margin-top:4px;margin-bottom:3px;">
             <span style="display:inline-block;padding:3px 10px;background:${returnBadgeBg};color:${returnBadgeColor};border:1.5px solid ${returnBadgeBorder};border-radius:4px;font-size:12px;font-weight:900;letter-spacing:0.8px;white-space:nowrap;text-transform:uppercase;">
@@ -490,7 +505,7 @@ export const generateInvoiceHTML = async (
         <td style="vertical-align:top;text-align:right;width:45%;">
           <table style="margin-left:auto;border-collapse:collapse;">
             <tr>
-              ${isFirst && !isReturnNote ? `
+              ${isFirst && !isReturnNote && !cfg.logo ? `
               <td style="vertical-align:top;padding-top:6px;padding-right:14px;white-space:nowrap;">
                 <div style="display:inline-flex;align-items:center;border:2px solid #000;border-radius:8px;padding:6px 10px;background:#fff;">
                   <div style="position:relative;display:flex;align-items:center;justify-content:center;width:42px;height:42px;margin-right:10px;">
@@ -913,7 +928,7 @@ export const generateHalfPageInvoiceHTML = async (
   <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
     <tr>
       <td style="vertical-align:middle;width:45%;">
-        <div style="font-size:22px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;white-space:nowrap;">CHAMPIKA HARDWARE</div>
+        ${brandLogoHTML(cfg, baseUrl, 42)}<div style="font-size:22px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;white-space:nowrap;">${brandNameOf(cfg)}</div>
         ${isReturnNote ? `
         <div style="margin-top:2px;margin-bottom:2px;">
           <span style="display:inline-block;padding:2px 7px;background:${returnBadgeBg};color:${returnBadgeColor};border:1px solid ${returnBadgeBorder};border-radius:3px;font-size:10px;font-weight:900;letter-spacing:0.5px;white-space:nowrap;text-transform:uppercase;">
@@ -930,7 +945,7 @@ export const generateHalfPageInvoiceHTML = async (
       <td style="vertical-align:top;text-align:right;width:50%;">
         <table style="margin-left:auto;border-collapse:collapse;">
           <tr>
-            ${isFirst && !isReturnNote ? `
+            ${isFirst && !isReturnNote && !cfg.logo ? `
             <td style="vertical-align:top;padding-top:6px;padding-right:12px;white-space:nowrap;">
               <div style="display:inline-flex;align-items:center;border:1.5px solid #000;border-radius:6px;padding:4px 8px;background:#fff;">
                 <div style="position:relative;display:flex;align-items:center;justify-content:center;width:32px;height:32px;margin-right:8px;">

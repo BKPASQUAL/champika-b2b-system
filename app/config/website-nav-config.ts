@@ -15,6 +15,9 @@ import {
   Tags,
   Layers,
   Truck,
+  ShieldCheck,
+  Receipt,
+  ClipboardList,
   LucideIcon,
 } from "lucide-react";
 
@@ -48,6 +51,7 @@ export const websiteNavItems: WebsiteNavSection[] = [
       { name: "Product Families", href: `${BASE}/families`, icon: Layers },
       { name: "Brands", href: `${BASE}/brands`, icon: Tags },
       { name: "Suppliers", href: `${BASE}/suppliers`, icon: Truck },
+      { name: "Warranty Types", href: `${BASE}/warranties`, icon: ShieldCheck },
       { name: "Banners", href: `${BASE}/banners`, icon: ImageIcon },
       { name: "Home Promo Strip", href: `${BASE}/promo-strip`, icon: Megaphone },
     ],
@@ -56,7 +60,9 @@ export const websiteNavItems: WebsiteNavSection[] = [
     title: "Sales",
     items: [
       { name: "Website Orders", href: `${BASE}/orders`, icon: ShoppingCart },
-      { name: "Quotations", href: `${BASE}/quotations`, icon: FileText },
+      { name: "BK Wiring Quotations", href: `${BASE}/office-quotations`, icon: FileText },
+      { name: "BK Wiring Invoices", href: `${BASE}/office-invoices`, icon: Receipt },
+      { name: "Online Quote Requests", href: `${BASE}/quotations`, icon: ClipboardList },
       { name: "Customers", href: `${BASE}/customers`, icon: Users },
     ],
   },

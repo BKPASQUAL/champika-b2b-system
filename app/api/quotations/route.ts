@@ -84,18 +84,19 @@ export async function POST(request: NextRequest) {
     if (!customerId) return NextResponse.json({ error: "Customer is required" }, { status: 400 });
     if (!items || items.length === 0) return NextResponse.json({ error: "At least one item is required" }, { status: 400 });
 
-    // Generate quotation number (QUO-0001 format)
+    // Generate quotation number (QUO-0001; BK Wiring website quotes use BKQ-0001)
+    const qPrefix = businessId === BUSINESS_IDS.WEBSITE ? "BKQ" : "QUO";
     const [createdRes, noRes] = await Promise.all([
       supabaseAdmin
         .from("quotations")
         .select("quotation_no")
-        .ilike("quotation_no", "QUO-%")
+        .ilike("quotation_no", `${qPrefix}-%`)
         .order("created_at", { ascending: false })
         .limit(500),
       supabaseAdmin
         .from("quotations")
         .select("quotation_no")
-        .ilike("quotation_no", "QUO-%")
+        .ilike("quotation_no", `${qPrefix}-%`)
         .order("quotation_no", { ascending: false })
         .limit(500),
     ]);
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
         return isNaN(n) ? 0 : n;
       })
     );
-    const quotationNo = `QUO-${String(maxSeq + 1).padStart(4, "0")}`;
+    const quotationNo = `${qPrefix}-${String(maxSeq + 1).padStart(4, "0")}`;
 
     const { data, error } = await supabaseAdmin
       .from("quotations")

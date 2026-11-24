@@ -19,8 +19,14 @@ import {
   Download,
   Share2,
 } from "lucide-react";
-import { printQuotation, printHalfPageQuotation, downloadQuotation } from "../print-utils";
-import { shareQuotation } from "@/app/lib/quotation-print";
+import {
+  printQuotation as printQuotationFor,
+  printHalfPageQuotation as printHalfPageQuotationFor,
+  downloadQuotation as downloadQuotationFor,
+  shareQuotation,
+} from "@/app/lib/quotation-print";
+import { useQuotationPortal } from "../_portal";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -102,6 +108,13 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const qp = useQuotationPortal();
+  const printQuotation = (qid: string, showBranding = true) => printQuotationFor(qid, qp.division, showBranding);
+  const printHalfPageQuotation = (qid: string, showBranding = true) => printHalfPageQuotationFor(qid, qp.division, showBranding);
+  const downloadQuotation = (qid: string, showBranding = true) => downloadQuotationFor(qid, qp.division, showBranding);
+  const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [convertPayment, setConvertPayment] = useState("Cash");
+  const [converting, setConverting] = useState(false);
 
   const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,8 +138,29 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
     }
   }, [loading, quotation, id, searchParams]);
 
+  /** Message sent with the shared PDF — quotation no, customer, items and the total. */
+  const shareMessage = (showBranding: boolean) => {
+    if (!quotation) return undefined;
+    const money = (n: number) =>
+      Number(n || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const units = quotation.items.reduce((s, i) => s + Number(i.quantity || 0), 0);
+    const isBk = qp.division === "website";
+    const from = !showBranding ? "" : isBk ? " from BK Wiring බඩු කඩේ" : " from Champika Hardware";
+    return [
+      `Quotation ${quotation.quotationNo}${from}`,
+      `Customer: ${quotation.customerName}`,
+      `Items: ${quotation.items.length} (${units} units)`,
+      quotation.extraDiscountAmount > 0 ? `Discount: ${isBk ? "Rs" : "LKR"} ${money(quotation.extraDiscountAmount)}` : "",
+      `*Total: ${isBk ? "Rs" : "LKR"} ${money(quotation.grandTotal)}*`,
+      "Valid for 7 days.",
+      showBranding && isBk ? "Call / WhatsApp 076-2873921 · bkwiringbadukade.lk" : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  };
+
   const handleSharePdf = (showBranding: boolean = true) =>
-    shareQuotation(id, "retail", quotation?.quotationNo || "", setSharing, showBranding);
+    shareQuotation(id, qp.division, quotation?.quotationNo || "", setSharing, showBranding, shareMessage(showBranding));
 
   useEffect(() => {
     const fetchQuotation = async () => {
@@ -138,7 +172,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
         setQuotation(data);
       } catch {
         toast.error("Failed to load quotation");
-        router.push("/dashboard/office/retail/quotations");
+        router.push(qp.basePath);
       } finally {
         setLoading(false);
       }
@@ -147,7 +181,33 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
   }, [id, router]);
 
   const handleConvertToBill = () => {
+    if (qp.convertMode === "api") {
+      setConvertPayment(quotation?.paymentType === "Credit" ? "Credit" : "Cash");
+      setShowConvertDialog(true);
+      return;
+    }
     router.push(`/dashboard/office/retail/walkin-sales?quotationId=${id}`);
+  };
+
+  // Website portal: create the invoice straight from the quotation (stock comes off Retail).
+  const handleConvertViaApi = async () => {
+    setConverting(true);
+    try {
+      const user = getUserBusinessContext();
+      const res = await fetch(`/api/quotations/${id}/convert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentType: convertPayment, userId: user?.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Convert failed");
+      toast.success(`Invoice ${data.invoiceNo} created`);
+      router.push(qp.invoicePath(data.invoiceId));
+    } catch (err: any) {
+      toast.error(err.message || "Convert failed");
+    } finally {
+      setConverting(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -159,7 +219,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
         throw new Error(data.error || "Delete failed");
       }
       toast.success("Quotation deleted");
-      router.push("/dashboard/office/retail/quotations");
+      router.push(qp.basePath);
     } catch (err: any) {
       toast.error(err.message || "Delete failed");
     } finally {
@@ -193,7 +253,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
     <div className="space-y-6 pb-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard/office/retail/quotations")}>
+        <Button variant="ghost" size="icon" onClick={() => router.push(qp.basePath)}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1 min-w-0">
@@ -218,7 +278,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {isConverted && quotation.convertedInvoiceId && (
-            <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/office/retail/invoices/${quotation.convertedInvoiceId}`)}>
+            <Button variant="outline" size="sm" onClick={() => router.push(qp.invoicePath(quotation.convertedInvoiceId!))}>
               <ExternalLink className="w-4 h-4 mr-2" />
               View Invoice {quotation.convertedInvoiceNo}
             </Button>
@@ -338,7 +398,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
               <Button variant="outline" size="sm" onClick={() => setShowDeleteDialog(true)} className="text-destructive hover:text-destructive">
                 <Trash2 className="w-4 h-4 mr-2" /> Delete
               </Button>
-              <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/office/retail/quotations/${id}/edit`)}>
+              <Button variant="outline" size="sm" onClick={() => router.push(`${qp.basePath}/${id}/edit`)}>
                 <Pencil className="w-4 h-4 mr-2" /> Edit
               </Button>
               <Button
@@ -366,7 +426,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
           </div>
           {quotation.convertedInvoiceId && (
             <Button size="sm" variant="outline" className="ml-auto border-green-300 text-green-700 hover:bg-green-100"
-              onClick={() => router.push(`/dashboard/office/retail/invoices/${quotation.convertedInvoiceId}`)}>
+              onClick={() => router.push(qp.invoicePath(quotation.convertedInvoiceId!))}>
               Open Invoice <ExternalLink className="w-3 h-3 ml-1" />
             </Button>
           )}
@@ -516,7 +576,11 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
             <Card className="border-green-200 bg-green-50/30">
               <CardContent className="py-4 space-y-3">
                 <p className="text-sm font-semibold text-green-800">Ready to finalise?</p>
-                <p className="text-xs text-muted-foreground">Converting will create a retail invoice and deduct stock.</p>
+                <p className="text-xs text-muted-foreground">
+                  {qp.convertMode === "api"
+                    ? "Converting will create a BK Wiring invoice and deduct stock from Retail."
+                    : "Converting will create a retail invoice and deduct stock."}
+                </p>
                 <Button
                   className="w-full bg-green-600 hover:bg-green-700 font-bold"
                   onClick={handleConvertToBill}
@@ -546,6 +610,38 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
           )}
         </div>
       </div>
+
+      {/* Convert Dialog (website portal) */}
+      <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Create invoice?</DialogTitle>
+            <DialogDescription>
+              <strong>{quotation.quotationNo}</strong> · LKR {quotation.grandTotal.toLocaleString()} for {quotation.customerName}.
+              Stock is deducted when the invoice is created.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2">
+            {["Cash", "Credit"].map((pt) => (
+              <Button
+                key={pt}
+                type="button"
+                variant={convertPayment === pt ? "default" : "outline"}
+                onClick={() => setConvertPayment(pt)}
+              >
+                {pt === "Cash" ? "💵 Cash (paid now)" : "📋 Credit (pay later)"}
+              </Button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConvertDialog(false)}>Cancel</Button>
+            <Button className="bg-green-600 hover:bg-green-700" onClick={handleConvertViaApi} disabled={converting}>
+              {converting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ArrowRightLeft className="w-4 h-4 mr-2" />}
+              Create Invoice
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

@@ -15,7 +15,7 @@ export function ProductCard({ p, base }: { p: ShopProductCard; base: string }) {
   const href = `${base}/p/${p.slug}`;
   const off = p.discountPct > 0 && p.mrp > p.price;
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-(--s-line) bg-(--s-surface) transition duration-300 hover:-translate-y-0.5 hover:border-(--s-accent)/50 hover:shadow-[0_16px_36px_-18px_rgba(15,23,42,0.28)]">
+    <div className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-(--s-line) bg-(--s-surface) transition duration-300 hover:-translate-y-0.5 hover:border-(--s-accent)/50 hover:shadow-[0_16px_36px_-18px_rgba(15,23,42,0.28)]">
       {/* Picture */}
       <Link href={href} className={`relative block aspect-square ${p.image ? "bg-white" : "bg-(--s-soft)"}`} tabIndex={-1} aria-hidden="true">
         {p.image ? (
@@ -24,11 +24,11 @@ export function ProductCard({ p, base }: { p: ShopProductCard; base: string }) {
             src={p.image}
             alt={p.name}
             loading="lazy"
-            className="h-full w-full object-contain p-4 transition duration-500 ease-out group-hover:scale-[1.04]"
+            className="absolute inset-0 h-full w-full object-contain p-4 transition duration-500 ease-out group-hover:scale-[1.04]"
           />
         ) : (
           // No photo yet: calm placeholder instead of a "broken image" icon.
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-(--s-muted)">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-(--s-muted)">
             <span className="flex h-14 w-14 items-center justify-center rounded-full bg-(--s-surface) ring-1 ring-(--s-line)">
               <Package className="h-6 w-6 opacity-70" />
             </span>

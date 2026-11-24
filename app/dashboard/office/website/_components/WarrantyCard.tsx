@@ -1,66 +1,93 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Bookmark, Loader2, Pencil, ShieldCheck, X } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ExternalLink, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { webApi } from "./api";
+import type { WebBrand } from "./types";
 
-type Preset = { id: string; period: string; terms: string };
+export type WarrantyPreset = { id: string; name: string; period: string; brandId: string | null; terms: string };
 
-const QUICK_PERIODS = ["3 months", "6 months", "1 year", "2 years", "3 years", "5 years"];
+export const QUICK_PERIODS = ["Lifetime", "6 months", "1 year", "2 years", "3 years", "5 years", "10 years"];
+
+/** "Orange › Akoya" style label for a brand or sub brand id. */
+export function brandLabel(brands: WebBrand[], id: string | null): string | null {
+  if (!id) return null;
+  const b = brands.find((x) => x.id === id);
+  if (!b) return null;
+  const parent = b.parentId ? brands.find((x) => x.id === b.parentId) : null;
+  return parent ? `${parent.name} › ${b.name}` : b.name;
+}
+
+const NONE = "none";
+const CUSTOM = "custom";
 
 /**
- * Optional warranty for a website product. Off = nothing shown on the shop.
- * Presets are a reusable list (period + terms) — picking one copies its values here.
+ * Warranty picker for a website product. Warranty types (period + terms, per
+ * brand / model) are managed on the Warranties page; picking one copies its
+ * values onto the product. "Custom" lets you type a one-off warranty.
  */
 export function WarrantyCard({
   period,
   terms,
+  brandId,
+  subBrandId,
+  brands,
   onChange,
 }: {
   period: string;
   terms: string;
+  brandId: string | null;
+  subBrandId: string | null;
+  brands: WebBrand[];
   onChange: (patch: { warrantyPeriod?: string; warrantyTerms?: string }) => void;
 }) {
-  const [on, setOn] = useState(!!period);
-  const [presets, setPresets] = useState<Preset[]>([]);
-  const [managing, setManaging] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => setOn((cur) => cur || !!period), [period]);
+  const [presets, setPresets] = useState<WarrantyPreset[]>([]);
+  const [customMode, setCustomMode] = useState(false);
 
   useEffect(() => {
-    webApi<{ presets: Preset[] }>("/api/website/warranties")
+    webApi<{ presets: WarrantyPreset[] }>("/api/website/warranties")
       .then((r) => setPresets(r.presets || []))
       .catch(() => {});
   }, []);
 
-  const savePresets = async (next: Preset[], msg: string) => {
-    setBusy(true);
-    try {
-      const r = await webApi<{ presets: Preset[] }>("/api/website/warranties", { method: "POST", json: { presets: next } });
-      setPresets(r.presets);
-      toast.success(msg);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not save");
-    } finally {
-      setBusy(false);
+  const same = (p: WarrantyPreset) =>
+    p.period.trim().toLowerCase() === period.trim().toLowerCase() && (p.terms || "").trim() === terms.trim();
+  const current = period.trim() ? presets.find(same) : undefined;
+  const value = !period.trim() && !customMode ? NONE : current && !customMode ? current.id : CUSTOM;
+
+  // This product's brand / model first, then general ones, then the rest.
+  const groups = useMemo(() => {
+    const label = (p: WarrantyPreset) => p.name || p.period;
+    const sort = (a: WarrantyPreset, b: WarrantyPreset) => label(a).localeCompare(label(b));
+    const mine = presets.filter((p) => p.brandId && (p.brandId === subBrandId || p.brandId === brandId)).sort(sort);
+    const general = presets.filter((p) => !p.brandId).sort(sort);
+    const other = presets.filter((p) => !mine.includes(p) && !general.includes(p)).sort(sort);
+    const myBrand = brandLabel(brands, subBrandId) || brandLabel(brands, brandId);
+    return [
+      { title: myBrand ? `For ${myBrand}` : "This brand", items: mine },
+      { title: "Any brand", items: general },
+      { title: "Other brands", items: other },
+    ].filter((g) => g.items.length > 0);
+  }, [presets, brandId, subBrandId, brands]);
+
+  const pick = (v: string) => {
+    if (v === NONE) {
+      setCustomMode(false);
+      onChange({ warrantyPeriod: "", warrantyTerms: "" });
+    } else if (v === CUSTOM) {
+      setCustomMode(true);
+    } else {
+      const p = presets.find((x) => x.id === v);
+      if (!p) return;
+      setCustomMode(false);
+      onChange({ warrantyPeriod: p.period, warrantyTerms: p.terms || "" });
     }
-  };
-
-  const same = (p: Preset) => p.period.trim().toLowerCase() === period.trim().toLowerCase() && p.terms.trim() === terms.trim();
-  const current = presets.find(same);
-
-  const addPreset = () => {
-    if (!period.trim()) return toast.error("Enter the warranty period first");
-    if (current) return toast.info("This warranty is already saved");
-    savePresets([...presets, { id: crypto.randomUUID(), period: period.trim(), terms: terms.trim() }], "Warranty saved for reuse");
   };
 
   return (
@@ -70,99 +97,87 @@ export function WarrantyCard({
           <CardTitle className="text-base flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-teal-600" /> Warranty
           </CardTitle>
-          <p className="text-xs text-muted-foreground mt-1">Only for items that have one. Shown on the shop product page.</p>
+          <p className="text-xs text-muted-foreground mt-1">Shown on the shop product page with its terms.</p>
         </div>
-        <label className="flex items-center gap-2 text-sm shrink-0">
-          <Switch
-            checked={on}
-            onCheckedChange={(v) => {
-              setOn(v);
-              if (!v) onChange({ warrantyPeriod: "", warrantyTerms: "" });
-            }}
-          />
-          {on ? "Has warranty" : "No warranty"}
-        </label>
+        <Link
+          href="/dashboard/office/website/warranties"
+          target="_blank"
+          className="text-[11px] text-teal-700 hover:underline flex items-center gap-1 shrink-0"
+        >
+          Manage warranties <ExternalLink className="h-3 w-3" />
+        </Link>
       </CardHeader>
 
-      {on && (
-        <CardContent className="space-y-4">
-          {presets.length > 0 && (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Saved warranties</Label>
-                <button type="button" className="text-[11px] text-teal-700 hover:underline flex items-center gap-1" onClick={() => setManaging((m) => !m)}>
-                  <Pencil className="h-3 w-3" /> {managing ? "Done" : "Manage"}
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {presets.map((p) => (
-                  <span
-                    key={p.id}
-                    className={`inline-flex items-center rounded-md border text-xs ${same(p) ? "border-teal-500 bg-teal-50 text-teal-800" : "bg-white hover:border-teal-300"}`}
+      <CardContent className="space-y-4">
+        <div className="space-y-1 max-w-md">
+          <Label>Warranty</Label>
+          <Select value={value} onValueChange={pick}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>No warranty</SelectItem>
+              {groups.map((g) => (
+                <SelectGroup key={g.title}>
+                  <SelectLabel className="text-[11px] text-muted-foreground">{g.title}</SelectLabel>
+                  {g.items.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name ? `${p.name} · ${p.period}` : p.period}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+              <SelectItem value={CUSTOM}>Custom (type for this item only)…</SelectItem>
+            </SelectContent>
+          </Select>
+          {presets.length === 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              No warranty types yet — add Lifetime / 5 years / 2 years etc. on the Warranties page.
+            </p>
+          )}
+        </div>
+
+        {value === CUSTOM && (
+          <>
+            <div className="space-y-1 max-w-sm">
+              <Label>Warranty period</Label>
+              <Input value={period} maxLength={60} placeholder="e.g. 1 year" onChange={(e) => onChange({ warrantyPeriod: e.target.value })} />
+              <div className="flex flex-wrap gap-1 pt-1">
+                {QUICK_PERIODS.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => onChange({ warrantyPeriod: q })}
+                    className={`text-[11px] rounded px-2 py-0.5 border ${period === q ? "border-teal-500 bg-teal-50 text-teal-800" : "hover:bg-muted"}`}
                   >
-                    <button
-                      type="button"
-                      className="px-2 py-1 text-left"
-                      title={p.terms || "No terms"}
-                      onClick={() => onChange({ warrantyPeriod: p.period, warrantyTerms: p.terms })}
-                    >
-                      <b className="font-medium">{p.period}</b>
-                      {p.terms && <span className="text-muted-foreground"> · {p.terms.slice(0, 32)}{p.terms.length > 32 ? "…" : ""}</span>}
-                    </button>
-                    {managing && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        className="px-1.5 py-1 border-l text-red-600 hover:bg-red-50"
-                        title="Delete this saved warranty (products already using it keep their warranty)"
-                        onClick={() => savePresets(presets.filter((x) => x.id !== p.id), "Saved warranty removed")}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </span>
+                    {q}
+                  </button>
                 ))}
               </div>
             </div>
-          )}
-
-          <div className="space-y-1 max-w-sm">
-            <Label>Warranty period</Label>
-            <Input value={period} maxLength={60} placeholder="e.g. 1 year" onChange={(e) => onChange({ warrantyPeriod: e.target.value })} />
-            <div className="flex flex-wrap gap-1 pt-1">
-              {QUICK_PERIODS.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => onChange({ warrantyPeriod: q })}
-                  className={`text-[11px] rounded px-2 py-0.5 border ${period === q ? "border-teal-500 bg-teal-50 text-teal-800" : "hover:bg-muted"}`}
-                >
-                  {q}
-                </button>
-              ))}
+            <div className="space-y-1">
+              <Label>Warranty terms (optional)</Label>
+              <Textarea
+                rows={4}
+                maxLength={2000}
+                value={terms}
+                placeholder={"- Covers manufacturing defects only\n- Keep the bill / invoice for claims"}
+                onChange={(e) => onChange({ warrantyTerms: e.target.value })}
+              />
+              <p className="text-[11px] text-muted-foreground">Lines starting with “-” show as bullet points on the shop.</p>
             </div>
-          </div>
+          </>
+        )}
 
-          <div className="space-y-1">
-            <Label>Warranty terms (optional)</Label>
-            <Textarea
-              rows={4}
-              maxLength={2000}
-              value={terms}
-              placeholder={"e.g.\n- Manufacturer warranty against factory defects\n- Keep the bill / invoice for claims\n- Not covered: burns, wrong wiring, physical damage"}
-              onChange={(e) => onChange({ warrantyTerms: e.target.value })}
-            />
-            <p className="text-[11px] text-muted-foreground">Lines starting with “-” show as bullet points on the shop.</p>
+        {current && value !== CUSTOM && (
+          <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-1">
+            <p className="font-medium text-sm">{period} warranty</p>
+            {terms ? (
+              <p className="text-muted-foreground whitespace-pre-line">{terms}</p>
+            ) : (
+              <p className="text-muted-foreground italic">No terms added for this warranty.</p>
+            )}
           </div>
-
-          <div className="flex justify-end">
-            <Button type="button" size="sm" variant="outline" disabled={busy || !period.trim() || !!current} onClick={addPreset}>
-              {busy ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bookmark className="h-3 w-3 mr-1" />}
-              {current ? "Saved for reuse" : "Save for reuse"}
-            </Button>
-          </div>
-        </CardContent>
-      )}
+        )}
+      </CardContent>
     </Card>
   );
 }

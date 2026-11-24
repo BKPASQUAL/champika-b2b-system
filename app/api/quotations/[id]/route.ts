@@ -17,7 +17,8 @@ export async function GET(
           id,
           shop_name,
           owner_name,
-          phone
+          phone,
+          address
         )
       `)
       .eq("id", id)
@@ -72,6 +73,7 @@ export async function GET(
       customerName: q.customers?.shop_name || "Unknown",
       customerOwner: q.customers?.owner_name,
       customerPhone: q.customers?.phone,
+      customerAddress: q.customers?.address,
       items: (q.items || []).map((item: any) => ({
         ...item,
         currentStock: stockMap[item.productId] ?? 0,

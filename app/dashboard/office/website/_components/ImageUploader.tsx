@@ -4,28 +4,59 @@ import { useRef, useState } from "react";
 import { Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { SquareCropDialog } from "./SquareCropDialog";
 
 /** Uploads to the public `products` bucket via the existing /api/upload route. */
 export function ImageUploader({
   value,
   onChange,
   max = 6,
+  crop = false,
 }: {
   value: string[];
   onChange: (urls: string[]) => void;
   max?: number;
+  /** Ask for a 1:1 square crop before uploading. */
+  crop?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
-  const handleFiles = async (files: FileList | null) => {
-    if (!files?.length) return;
+  // Files waiting for the 1:1 crop dialog, and the ones already cropped.
+  const [queue, setQueue] = useState<File[]>([]);
+  const [step, setStep] = useState(0);
+  const [ready, setReady] = useState<File[]>([]);
+
+  const handleFiles = (list: FileList | null) => {
+    // Copy the files BEFORE resetting the input — clearing it empties the FileList.
+    const files = Array.from(list ?? []).filter((f) => f.type.startsWith("image/"));
+    if (inputRef.current) inputRef.current.value = "";
+    if (!files.length) return;
     const room = max - value.length;
     if (room <= 0) return toast.error(`Maximum ${max} images`);
+    if (!crop) return upload(files.slice(0, room));
+    setQueue(files.slice(0, room));
+    setStep(0);
+    setReady([]);
+  };
+
+  const next = (file: File) => {
+    const done = [...ready, file];
+    if (step + 1 < queue.length) {
+      setReady(done);
+      setStep(step + 1);
+    } else {
+      setQueue([]);
+      setReady([]);
+      upload(done);
+    }
+  };
+
+  const upload = async (files: File[]) => {
     setBusy(true);
     try {
       const urls: string[] = [];
-      for (const file of Array.from(files).slice(0, room)) {
+      for (const file of files) {
         const fd = new FormData();
         fd.append("file", file);
         const res = await fetch("/api/upload", { method: "POST", body: fd });
@@ -37,7 +68,6 @@ export function ImageUploader({
       toast.error(e.message || "Upload failed");
     } finally {
       setBusy(false);
-      if (inputRef.current) inputRef.current.value = "";
     }
   };
 
@@ -79,6 +109,20 @@ export function ImageUploader({
         multiple
         className="hidden"
         onChange={(e) => handleFiles(e.target.files)}
+      />
+      <SquareCropDialog
+        file={queue[step] ?? null}
+        index={step}
+        total={queue.length}
+        onDone={next}
+        onSkip={() => queue[step] && next(queue[step])}
+        onCancel={() => {
+          // Closing the dialog still uploads anything already cropped.
+          const done = ready;
+          setQueue([]);
+          setReady([]);
+          if (done.length) upload(done);
+        }}
       />
     </div>
   );

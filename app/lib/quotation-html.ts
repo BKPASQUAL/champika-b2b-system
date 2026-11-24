@@ -4,7 +4,8 @@
  * No browser-only imports (no jsPDF, no html2canvas, no toast).
  */
 import QRCode from "qrcode";
-import { DIVISIONS } from "./invoice-html";
+import { DIVISIONS, brandLogoHTML, brandNameOf } from "./invoice-html";
+import { generateBkQuotationHTML } from "./quotation-html-bk";
 
 const FONT_STACK =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif";
@@ -31,6 +32,8 @@ export const generateQuotationHTML = async (
   baseUrl = "",
   showBranding: boolean = true
 ): Promise<string> => {
+  // BK Wiring quotations use the website shop quotation design
+  if (divisionKey === "website" && showBranding) return generateBkQuotationHTML(quotation);
   const cfg = DIVISIONS[divisionKey] ?? DIVISIONS.retail;
 
   const origin =
@@ -110,7 +113,7 @@ export const generateQuotationHTML = async (
     <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
       <tr>
         <td style="vertical-align:top;width:58%;">
-          <div style="font-size:32px;font-weight:900;color:#0f172a;letter-spacing:-0.5px;line-height:1.1;text-transform:uppercase;">CHAMPIKA HARDWARE</div>
+          ${brandLogoHTML(cfg, baseUrl, 56)}<div style="font-size:32px;font-weight:900;color:#0f172a;letter-spacing:-0.5px;line-height:1.1;text-transform:uppercase;">${brandNameOf(cfg)}</div>
           <div style="font-size:10px;color:#475569;margin-top:3px;line-height:1.5;font-weight:500;">
             ${cfg.division} &bull; ${cfg.address}<br>Tel: ${cfg.tel}
           </div>
@@ -118,7 +121,7 @@ export const generateQuotationHTML = async (
         <td style="vertical-align:top;text-align:right;width:42%;">
           <table style="margin-left:auto;border-collapse:collapse;">
             <tr>
-              ${isFirst ? `
+              ${isFirst && !cfg.logo ? `
               <td style="vertical-align:top;padding-top:4px;padding-right:12px;">
                 <div style="display:inline-flex;align-items:center;border:2px solid #0f172a;border-radius:8px;padding:6px 10px;background:#fff;">
                   <div style="position:relative;display:flex;align-items:center;justify-content:center;width:40px;height:40px;margin-right:10px;">
@@ -251,6 +254,7 @@ export const generateHalfPageQuotationHTML = async (
   baseUrl = "",
   showBranding: boolean = true
 ): Promise<string> => {
+  if (divisionKey === "website" && showBranding) return generateBkQuotationHTML(quotation, true);
   const cfg = DIVISIONS[divisionKey] ?? DIVISIONS.retail;
 
   const shopName     = quotation.customer?.shop     || quotation.shopName     || quotation.customer?.name || "Unknown";
@@ -320,7 +324,7 @@ export const generateHalfPageQuotationHTML = async (
   <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
     <tr>
       <td style="vertical-align:middle;width:42%;">
-        <div style="font-size:20px;font-weight:900;color:#0f172a;letter-spacing:-0.3px;line-height:1.1;text-transform:uppercase;">CHAMPIKA HARDWARE</div>
+        ${brandLogoHTML(cfg, baseUrl, 38)}<div style="font-size:20px;font-weight:900;color:#0f172a;letter-spacing:-0.3px;line-height:1.1;text-transform:uppercase;">${brandNameOf(cfg)}</div>
         <div style="font-size:8px;color:#475569;margin-top:2px;line-height:1.4;">
           ${cfg.division} &bull; ${cfg.address}<br>Tel: ${cfg.tel}
         </div>
@@ -329,7 +333,7 @@ export const generateHalfPageQuotationHTML = async (
       <td style="vertical-align:top;text-align:right;width:42%;">
         <table style="margin-left:auto;border-collapse:collapse;">
           <tr>
-            ${isFirst ? `
+            ${isFirst && !cfg.logo ? `
             <td style="vertical-align:top;padding-top:4px;padding-right:10px;">
               <div style="display:inline-flex;align-items:center;border:1.5px solid #0f172a;border-radius:6px;padding:3px 6px;background:#fff;">
                 <div style="position:relative;display:flex;align-items:center;justify-content:center;width:28px;height:28px;margin-right:6px;">

@@ -82,6 +82,8 @@ export async function GET(
         ? new Date(q.invoice_date).toISOString().split("T")[0]
         : q.created_at.split("T")[0],
       grandTotal: q.grand_total,
+      extraDiscountPercent: q.extra_discount_percent || 0,
+      paymentType: q.payment_type,
       notes: q.notes,
       customer: {
         shop: q.customers?.shop_name || "",
@@ -94,6 +96,7 @@ export async function GET(
         sku: item.sku || "-",
         productName: item.productName || item.name || "Unknown Product",
         unitPrice: item.unitPrice || item.price || 0,
+        mrp: item.mrp || 0,
         quantity: item.quantity || 0,
         unit: item.unit || "Pcs",
         freeQuantity: item.freeQuantity || item.free || 0,
