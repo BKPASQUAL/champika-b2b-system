@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getBrands, getProducts, getShopBase } from "@/lib/shop-data";
 import { Listing, type ListingParams } from "../../../_components/Listing";
@@ -31,18 +30,8 @@ export default async function BrandPage({ params, searchParams }: Props) {
   const [{ slug }, sp, base] = await Promise.all([params, searchParams, getShopBase()]);
   const found = await findBrand(slug);
   if (!found) notFound();
-  const { brand, parent, subs } = found;
+  const { brand, parent } = found;
   const products = await getProducts({ brandId: brand.id });
-
-  const top = subs.length ? (
-    <div className="mb-6 flex flex-wrap gap-2">
-      {subs.map((s) => (
-        <Link key={s.id} href={`${base}/b/${s.slug}`} className="rounded-full border border-(--s-line) bg-(--s-surface) px-3 py-1 text-sm font-medium text-(--s-ink-2) hover:border-(--s-ink) hover:text-(--s-ink)">
-          {s.name}
-        </Link>
-      ))}
-    </div>
-  ) : null;
 
   return (
     <Listing
@@ -53,7 +42,6 @@ export default async function BrandPage({ params, searchParams }: Props) {
       products={products}
       params={sp}
       hideBrandFilter
-      top={top}
     />
   );
 }

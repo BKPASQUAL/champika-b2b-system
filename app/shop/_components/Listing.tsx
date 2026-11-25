@@ -15,6 +15,8 @@ import { buildSearchKey, searchWords, suggestSizeTags } from "@/lib/web-search";
 
 export type ListingParams = {
   brand?: string;
+  /** Sub brand slugs (e.g. Sigma, Akoya under Orange). */
+  sub?: string;
   family?: string;
   sort?: string;
   q?: string;
@@ -58,7 +60,7 @@ export async function Listing({
   top?: React.ReactNode;
 }) {
   const [facets, tree] = await Promise.all([getFacets(all), getCategoryTree()]);
-  const { products: filtered, sort, brandSlugs, familyIds } = applyListingFilters(all, facets, params);
+  const { products: filtered, sort, brandSlugs, subSlugs, familyIds } = applyListingFilters(all, facets, params);
 
   let list = filtered;
   const find = (params.find || "").trim().slice(0, 80);
@@ -99,7 +101,10 @@ export async function Listing({
       .map((f) => ({ key: `f-${f.id}`, label: f.name, href: url({ family: toggle(familyIds, f.id) }) })),
     ...facets.brands
       .filter((b) => brandSlugs.includes(b.slug))
-      .map((b) => ({ key: `b-${b.id}`, label: b.name, href: url({ brand: toggle(brandSlugs, b.slug) }) })),
+      .map((b) => ({ key: `b-${b.id}`, label: b.name, href: url({ brand: toggle(brandSlugs, b.slug), sub: null }) })),
+    ...facets.subBrands
+      .filter((b) => subSlugs.includes(b.slug))
+      .map((b) => ({ key: `s-${b.id}`, label: b.name, href: url({ sub: toggle(subSlugs, b.slug) }) })),
     ...(min || max
       ? [{ key: "price", label: min && max ? `${rs(min)} – ${rs(max)}` : min ? `From ${rs(min)}` : `Up to ${rs(max)}`, href: url({ min: null, max: null }) }]
       : []),
@@ -130,6 +135,9 @@ export async function Listing({
   );
   const showTypes = facets.families.length > 0;
   const showBrands = !hideBrandFilter && facets.brands.length > 0;
+  // Sub brands appear once their brand is picked (on a brand page, straight away).
+  const selectedBrandIds = new Set(facets.brands.filter((b) => brandSlugs.includes(b.slug)).map((b) => b.id));
+  const subBrands = facets.subBrands.filter((s) => (hideBrandFilter ? s.count < all.length || facets.subBrands.length > 1 : selectedBrandIds.has(s.parentId)));
   const sortLabel = SORT_OPTIONS.find((o) => o.key === sort)?.label;
 
   return (
@@ -231,7 +239,7 @@ export async function Listing({
               </div>
 
               {/* Line 1: product types · Line 2: brands */}
-              {(showTypes || showBrands) && (
+              {(showTypes || showBrands || subBrands.length > 0) && (
                 <div className="min-w-0 space-y-2.5 border-t border-(--s-line) pt-3.5">
                   {showTypes &&
                     chipLine(
@@ -247,9 +255,19 @@ export async function Listing({
                     chipLine(
                       <>
                         <RowLabel>Brand</RowLabel>
-                        <BrandChip href={url({ brand: null })} on={!brandSlugs.length} label="All brands" />
+                        <BrandChip href={url({ brand: null, sub: null })} on={!brandSlugs.length} label="All brands" />
                         {facets.brands.map((b) => (
-                          <BrandChip key={b.id} href={url({ brand: toggle(brandSlugs, b.slug) })} on={brandSlugs.includes(b.slug)} label={b.name} logo={b.logoUrl} />
+                          <BrandChip key={b.id} href={url({ brand: toggle(brandSlugs, b.slug), sub: null })} on={brandSlugs.includes(b.slug)} label={b.name} logo={b.logoUrl} />
+                        ))}
+                      </>,
+                    )}
+                  {subBrands.length > 0 &&
+                    chipLine(
+                      <>
+                        <RowLabel>Sub brand</RowLabel>
+                        <TypeChip href={url({ sub: null })} on={!subSlugs.length} label="All" />
+                        {subBrands.map((s) => (
+                          <TypeChip key={s.id} href={url({ sub: toggle(subSlugs, s.slug) })} on={subSlugs.includes(s.slug)} label={s.name} count={s.count} />
                         ))}
                       </>,
                     )}
@@ -273,7 +291,7 @@ export async function Listing({
                     </NavLink>
                   ))}
                   <NavLink
-                    href={url({ brand: null, family: null, min: null, max: null, find: null })}
+                    href={url({ brand: null, sub: null, family: null, min: null, max: null, find: null })}
                     scroll={false}
                     className="ml-1 text-[13.5px] font-semibold text-(--s-muted) underline-offset-4 transition hover:text-(--s-ink) hover:underline"
                   >
@@ -299,7 +317,7 @@ export async function Listing({
                   {all.length ? "Try removing a filter or choosing another option." : "We are adding items to this category. Meanwhile, have a look at our other products."}
                 </p>
                 <Link
-                  href={all.length ? url({ brand: null, family: null, min: null, max: null, tab: null, find: null }) : `${base}/products`}
+                  href={all.length ? url({ brand: null, sub: null, family: null, min: null, max: null, tab: null, find: null }) : `${base}/products`}
                   className="mt-5 rounded-full bg-(--s-btn) px-5 py-2.5 text-sm font-semibold text-(--s-btn-ink) hover:opacity-85"
                 >
                   {all.length ? "Clear filters" : "Browse all products"}
@@ -432,5 +450,5 @@ function MiniCategory({ href, label, on }: { href: string; label: string; on: bo
 
 /** Small label in front of a chip row ("Type", "Brand", "Applied"). */
 function RowLabel({ children }: { children: React.ReactNode }) {
-  return <span className="w-16 shrink-0 text-[12px] font-bold uppercase tracking-wider text-(--s-muted)">{children}</span>;
+  return <span className="w-20 shrink-0 text-[12px] font-bold uppercase tracking-wider text-(--s-muted)">{children}</span>;
 }

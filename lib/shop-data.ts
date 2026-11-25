@@ -467,9 +467,11 @@ const cachedFamilies = shopCached(async (ids: string[]) => {
 export async function getFacets(list: ShopProductCard[]) {
   const brandCount: Record<string, number> = {};
   const familyCount: Record<string, number> = {};
+  const subCount: Record<string, number> = {};
   for (const p of list) {
     if (p.brandId) brandCount[p.brandId] = (brandCount[p.brandId] || 0) + 1;
     if (p.familyId) familyCount[p.familyId] = (familyCount[p.familyId] || 0) + 1;
+    if (p.subBrandId) subCount[p.subBrandId] = (subCount[p.subBrandId] || 0) + 1;
   }
   const familyIds = Object.keys(familyCount).sort();
   const [brands, fams] = await Promise.all([getBrands(), familyIds.length ? cachedFamilies(familyIds) : Promise.resolve([] as any[])]);
@@ -477,6 +479,10 @@ export async function getFacets(list: ShopProductCard[]) {
     brands: brands
       .filter((b) => brandCount[b.id])
       .map((b) => ({ id: b.id, name: b.name, slug: b.slug, logoUrl: b.logoUrl, count: brandCount[b.id] })),
+    /** Sub brands (e.g. Orange → Sigma, Akoya) that have items in this list. */
+    subBrands: brands
+      .filter((b) => b.parentId && subCount[b.id])
+      .map((b) => ({ id: b.id, name: b.name, slug: b.slug, logoUrl: b.logoUrl, parentId: b.parentId as string, count: subCount[b.id] })),
     families: (fams || []).map((f: any) => ({ id: f.id as string, name: f.name as string, count: familyCount[f.id] })),
   };
 }
@@ -485,18 +491,21 @@ export async function getFacets(list: ShopProductCard[]) {
 export function applyListingFilters(
   list: ShopProductCard[],
   facets: Awaited<ReturnType<typeof getFacets>>,
-  sp: { brand?: string | string[]; family?: string | string[]; stock?: string; sort?: string },
+  sp: { brand?: string | string[]; sub?: string | string[]; family?: string | string[]; stock?: string; sort?: string },
 ) {
   const asArr = (v?: string | string[]) => (Array.isArray(v) ? v : v ? v.split(",") : []).filter(Boolean);
   const brandSlugs = asArr(sp.brand);
   const familyIds = asArr(sp.family);
+  const subSlugs = asArr(sp.sub);
+  const subIds = new Set(facets.subBrands.filter((b) => subSlugs.includes(b.slug)).map((b) => b.id));
   const brandIds = new Set(facets.brands.filter((b) => brandSlugs.includes(b.slug)).map((b) => b.id));
   let out = list;
   if (brandIds.size) out = out.filter((p) => p.brandId && brandIds.has(p.brandId));
+  if (subIds.size) out = out.filter((p) => p.subBrandId && subIds.has(p.subBrandId));
   if (familyIds.length) out = out.filter((p) => p.familyId && familyIds.includes(p.familyId));
   if (sp.stock === "1") out = out.filter((p) => p.available);
   const sort = (SORT_OPTIONS.find((o) => o.key === sp.sort)?.key || "popular") as SortKey;
-  return { products: sortProducts(out, sort), sort, brandSlugs, familyIds, inStockOnly: sp.stock === "1" };
+  return { products: sortProducts(out, sort), sort, brandSlugs, subSlugs, familyIds, inStockOnly: sp.stock === "1" };
 }
 
 // ---------------------------------------------------------------- promo strip

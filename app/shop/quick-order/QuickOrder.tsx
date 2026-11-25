@@ -1048,13 +1048,17 @@ function PickMenu({
       if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    // Close when the page scrolls, so the menu never floats over the sticky header.
+    const onScroll = () => setOpen(false);
     document.addEventListener("mousedown", close);
     document.addEventListener("touchstart", close);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       document.removeEventListener("mousedown", close);
       document.removeEventListener("touchstart", close);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll);
     };
   }, [open]);
 
@@ -1084,7 +1088,7 @@ function PickMenu({
       {open && (
         <ul
           role="listbox"
-          className={`absolute inset-x-0 top-full z-40 mt-1.5 max-h-[60vh] overflow-y-auto rounded-2xl border border-(--s-line) bg-(--s-surface) p-1.5 shadow-[0_12px_40px_-8px_rgba(15,23,42,0.25)] ${menuClass}`}
+          className={`absolute inset-x-0 top-full z-30 mt-1.5 max-h-[60vh] overflow-y-auto rounded-2xl border border-(--s-line) bg-(--s-surface) p-1.5 shadow-[0_12px_40px_-8px_rgba(15,23,42,0.25)] ${menuClass}`}
         >
           {options.map((o) => {
             const on = o.key === value;
