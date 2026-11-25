@@ -9,6 +9,7 @@ import {
 } from "@/lib/shop-data";
 import { ProductGrid } from "./ProductCard";
 import { ListingSearch } from "./ListingSearch";
+import { ListingNavProvider, ListingResults, NavLink } from "./ListingNav";
 import { rs } from "./format";
 import { buildSearchKey, searchWords, suggestSizeTags } from "@/lib/web-search";
 
@@ -132,6 +133,7 @@ export async function Listing({
   const sortLabel = SORT_OPTIONS.find((o) => o.key === sort)?.label;
 
   return (
+    <ListingNavProvider>
     <div className="mx-auto px-4 md:px-6 xl:px-10 py-6 lg:py-8">
       <nav aria-label="Breadcrumb" className="mb-5 flex flex-wrap items-center gap-1.5 text-xs font-medium text-(--s-muted)">
         <Link href={base || "/"} className="transition hover:text-(--s-ink)">Home</Link>
@@ -209,7 +211,7 @@ export async function Listing({
                     </summary>
                     <div className="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-2xl border border-(--s-line) bg-(--s-surface) p-1.5 shadow-2xl">
                       {SORT_OPTIONS.map((o) => (
-                        <Link
+                        <NavLink
                           key={o.key}
                           href={url({ sort: o.key === "popular" ? null : o.key })}
                           scroll={false}
@@ -219,7 +221,7 @@ export async function Listing({
                         >
                           {o.label}
                           {o.key === sort && <Check className="h-4 w-4 text-(--s-accent)" />}
-                        </Link>
+                        </NavLink>
                       ))}
                     </div>
                   </details>
@@ -259,7 +261,7 @@ export async function Listing({
                 <div className="flex flex-wrap items-center gap-2 border-t border-(--s-line) pt-3.5">
                   <RowLabel>Applied</RowLabel>
                   {applied.map((a) => (
-                    <Link
+                    <NavLink
                       key={a.key}
                       href={a.href}
                       scroll={false}
@@ -268,21 +270,22 @@ export async function Listing({
                     >
                       {a.label}
                       <X className="h-3.5 w-3.5" />
-                    </Link>
+                    </NavLink>
                   ))}
-                  <Link
+                  <NavLink
                     href={url({ brand: null, family: null, min: null, max: null, find: null })}
                     scroll={false}
                     className="ml-1 text-[13.5px] font-semibold text-(--s-muted) underline-offset-4 transition hover:text-(--s-ink) hover:underline"
                   >
                     Clear all
-                  </Link>
+                  </NavLink>
                 </div>
               )}
             </div>
           )}
 
           <div className="pt-5">
+            <ListingResults>
             {top}
             {products.length ? (
               <ProductGrid products={products} base={base} />
@@ -303,17 +306,19 @@ export async function Listing({
                 </Link>
               </div>
             )}
+            </ListingResults>
           </div>
         </div>
       </div>
     </div>
+    </ListingNavProvider>
   );
 }
 
 /** Product type chip (line 1): soft pill, slate-900 when chosen. */
 function TypeChip({ href, on, label, count }: { href: string; on: boolean; label: string; count?: number }) {
   return (
-    <Link
+    <NavLink
       href={href}
       scroll={false}
       className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-4 text-[14px] font-semibold transition ${
@@ -332,14 +337,14 @@ function TypeChip({ href, on, label, count }: { href: string; on: boolean; label
           {count}
         </span>
       )}
-    </Link>
+    </NavLink>
   );
 }
 
 /** Brand chip (line 2): logo when there is one, electric blue gradient when chosen. */
 function BrandChip({ href, on, label, logo }: { href: string; on: boolean; label: string; logo?: string | null }) {
   return (
-    <Link
+    <NavLink
       href={href}
       scroll={false}
       className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-4 text-[14px] font-semibold transition ${
@@ -354,7 +359,7 @@ function BrandChip({ href, on, label, logo }: { href: string; on: boolean; label
       )}
       <span>{label}</span>
       {on && label !== "All brands" && <Check className="h-3.5 w-3.5 stroke-[2.5]" />}
-    </Link>
+    </NavLink>
   );
 }
 
@@ -372,9 +377,10 @@ function CategoryTile({
   on: boolean;
 }) {
   return (
-    <Link
+    <NavLink
       href={href}
-      className={`group flex min-h-11 items-center gap-3 rounded-xl px-2.5 py-2 transition ${
+      scroll={false}
+      className={`group relative flex min-h-11 items-center gap-3 rounded-xl px-2.5 py-2 transition ${
         on
           ? "bg-(--s-accent) text-white shadow-[0_2px_8px_-2px_rgba(37,99,235,0.4)]"
           : "text-(--s-ink-2) hover:bg-(--s-soft) hover:text-(--s-ink)"
@@ -404,22 +410,23 @@ function CategoryTile({
           {count}
         </span>
       )}
-    </Link>
+    </NavLink>
   );
 }
 
 function MiniCategory({ href, label, on }: { href: string; label: string; on: boolean }) {
   return (
-    <Link
+    <NavLink
       href={href}
-      className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[14px] font-semibold transition ${
+      scroll={false}
+      className={`relative shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[14px] font-semibold transition ${
         on
           ? "bg-(--s-accent) font-bold text-white shadow-[0_2px_8px_-2px_rgba(37,99,235,0.4)]"
           : "bg-(--s-surface) text-(--s-ink-2) ring-1 ring-(--s-line)"
       }`}
     >
       {label}
-    </Link>
+    </NavLink>
   );
 }
 

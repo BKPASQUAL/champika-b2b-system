@@ -83,7 +83,7 @@ export function ProductGrid({ products, base, wide = false }: { products: ShopPr
   return (
     <div
       className={`grid grid-cols-2 gap-3 sm:gap-4 ${
-        wide ? "sm:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]" : "sm:grid-cols-[repeat(auto-fill,minmax(210px,1fr))]"
+        wide ? "sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))]" : "sm:grid-cols-[repeat(auto-fill,minmax(230px,1fr))]"
       }`}
     >
       {products.map((p) => (

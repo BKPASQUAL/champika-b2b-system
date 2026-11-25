@@ -53,8 +53,8 @@ export function AddToCartButton({ id, name, available, withQty }: { id: string; 
   return (
     <div className="@container">
     {/* Narrow cards (phones): qty box on top, full-width Add below, so the button is never cut off. */}
-    <div className="flex flex-col gap-2 @[200px]:flex-row @[200px]:items-center">
-      <div className="flex h-10 w-full shrink-0 items-center justify-between rounded-xl border border-(--s-line) bg-(--s-surface) @[200px]:w-auto @[200px]:justify-start">
+    <div className="flex flex-col gap-2 @[190px]:flex-row @[190px]:items-center">
+      <div className="flex h-10 w-full shrink-0 items-center justify-between rounded-xl border border-(--s-line) bg-(--s-surface) @[190px]:w-auto @[190px]:justify-start">
         <button
           type="button"
           aria-label="Less"

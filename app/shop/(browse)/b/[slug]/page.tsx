@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getBrands, getProducts, getShopBase } from "@/lib/shop-data";
-import { Listing, type ListingParams } from "../../_components/Listing";
+import { Listing, type ListingParams } from "../../../_components/Listing";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<ListingParams> };
 

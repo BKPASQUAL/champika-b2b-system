@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getProducts, getShopBase } from "@/lib/shop-data";
-import { Listing, type ListingParams } from "../_components/Listing";
+import { Listing, type ListingParams } from "../../_components/Listing";
 
 export const metadata: Metadata = {
   title: "Shop all products",

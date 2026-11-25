@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getCategoryBySlug, getProducts, getShopBase } from "@/lib/shop-data";
-import { Listing, type ListingParams } from "../../_components/Listing";
+import { Listing, type ListingParams } from "../../../_components/Listing";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<ListingParams> };
 
