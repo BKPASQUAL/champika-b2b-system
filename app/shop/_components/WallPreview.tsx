@@ -50,73 +50,176 @@ async function cutOut(src: string): Promise<string | null> {
         const px = data.data;
 
         // Background colour = average of the border pixels.
-        let br = 0, bg = 0, bb = 0, n = 0;
+        let br = 0, bg = 0, bb = 0, ba = 0, n = 0;
         const addPx = (x: number, y: number) => {
           const k = (y * w + x) * 4;
-          br += px[k]; bg += px[k + 1]; bb += px[k + 2]; n++;
+          br += px[k]; bg += px[k + 1]; bb += px[k + 2]; ba += px[k + 3]; n++;
         };
         for (let x = 0; x < w; x++) { addPx(x, 0); addPx(x, h - 1); }
         for (let y = 0; y < h; y++) { addPx(0, y); addPx(w - 1, y); }
-        br /= n; bg /= n; bb /= n;
+        br /= n; bg /= n; bb /= n; ba /= n;
+        // Already a transparent PNG cut-out → use it exactly as uploaded.
+        if (ba < 40) return resolve(src);
         const bgLum = 0.299 * br + 0.587 * bg + 0.114 * bb;
         if (bgLum < 150) return resolve(null); // not a light studio backdrop
 
-        // Wide enough to swallow the photo's soft studio shadow too (it fades
-        // gradually, so the STEP check lets the fill run through it), while the
-        // sharp outline of the plate still stops the fill.
+        // Flood-fill the backdrop from the border, stopping at edges. Wide colour
+        // range (FAR) so the photo's soft shadow is removed too.
         const FAR = 190; // max distance from the backdrop colour
-        const STEP = 12; // max change between neighbouring pixels (stops at hard edges)
-        const dist = (k: number, r: number, g: number, b: number) =>
-          Math.abs(px[k] - r) + Math.abs(px[k + 1] - g) + Math.abs(px[k + 2] - b);
+        const dist = (k: number) => Math.abs(px[k] - br) + Math.abs(px[k + 1] - bg) + Math.abs(px[k + 2] - bb);
+
+        // Edge map: brightness change across 4 px, not between neighbours — a
+        // white plate on a white backdrop may be only ~8 shades darker, with an
+        // edge that fades over several pixels. Comparing neighbours lets the fill
+        // creep across such a soft edge; this wider window still sees it.
+        const GRAD = 5;
+        const lum = new Float32Array(w * h);
+        for (let i = 0; i < w * h; i++) lum[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+        const edge = new Uint8Array(w * h);
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const gx = Math.abs(lum[y * w + Math.min(w - 1, x + 2)] - lum[y * w + Math.max(0, x - 2)]);
+            const gy = Math.abs(lum[Math.min(h - 1, y + 2) * w + x] - lum[Math.max(0, y - 2) * w + x]);
+            if (Math.max(gx, gy) >= GRAD) edge[y * w + x] = 1;
+          }
+        }
 
         const seen = new Uint8Array(w * h);
         const stack: number[] = [];
-        const seed = (i: number) => {
-          if (seen[i]) return;
-          const k = i * 4;
-          if (dist(k, br, bg, bb) > FAR) return;
+        const visit = (i: number) => {
+          if (seen[i] || edge[i] || dist(i * 4) > FAR) return;
           seen[i] = 1;
           stack.push(i);
         };
-        for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
-        for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
-
+        for (let x = 0; x < w; x++) { visit(x); visit((h - 1) * w + x); }
+        for (let y = 0; y < h; y++) { visit(y * w); visit(y * w + w - 1); }
         while (stack.length) {
           const i = stack.pop()!;
-          const k = i * 4;
           const x = i % w;
-          const y = (i - x) / w;
-          const r = px[k], g = px[k + 1], b = px[k + 2];
-          const visit = (j: number) => {
-            if (seen[j]) return;
-            const kj = j * 4;
-            if (dist(kj, r, g, b) > STEP || dist(kj, br, bg, bb) > FAR) return;
-            seen[j] = 1;
-            stack.push(j);
-          };
           if (x > 0) visit(i - 1);
           if (x < w - 1) visit(i + 1);
-          if (y > 0) visit(i - w);
-          if (y < h - 1) visit(i + w);
+          if (i >= w) visit(i - w);
+          if (i < w * (h - 1)) visit(i + w);
+        }
+
+        // Switch / socket plates are solid shapes. On a WHITE plate the fill
+        // leaks into the white frame (same colour as the backdrop), leaving only
+        // the rocker and the plate's hair-thin side outlines. So keep everything
+        // between the first and last kept pixel of each row (or each column).
+        // Tiny specks are ignored by blob size — NOT by how many pixels a row
+        // has, because those thin outlines are exactly what marks the plate edge.
+        const blob = new Int32Array(w * h).fill(-1);
+        const blobSize: number[] = [];
+        for (let s = 0; s < w * h; s++) {
+          if (seen[s] || blob[s] >= 0) continue;
+          const id = blobSize.length;
+          let size = 0;
+          const st = [s];
+          blob[s] = id;
+          while (st.length) {
+            const i = st.pop()!;
+            size++;
+            const x = i % w;
+            const add = (j: number) => {
+              if (!seen[j] && blob[j] < 0) { blob[j] = id; st.push(j); }
+            };
+            if (x > 0) add(i - 1);
+            if (x < w - 1) add(i + 1);
+            if (i >= w) add(i - w);
+            if (i < w * (h - 1)) add(i + w);
+          }
+          blobSize.push(size);
+        }
+        const minBlob = Math.max(30, w * h * 0.0001);
+        const rowMin = new Int32Array(h).fill(-1), rowMax = new Int32Array(h).fill(-1);
+        const colMin = new Int32Array(w).fill(-1), colMax = new Int32Array(w).fill(-1);
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const i = y * w + x;
+            if (seen[i] || blobSize[blob[i]] < minBlob) continue;
+            if (rowMin[y] < 0) rowMin[y] = x;
+            rowMax[y] = x;
+            if (colMin[x] < 0) colMin[x] = y;
+            colMax[x] = y;
+          }
+        }
+        const gone = new Uint8Array(w * h); // 1 = transparent in the result
+        let lumSum = 0, lumCount = 0;
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const inside =
+              (rowMin[y] >= 0 && x >= rowMin[y] && x <= rowMax[y]) || (colMin[x] >= 0 && y >= colMin[x] && y <= colMax[x]);
+            if (inside) { lumSum += lum[y * w + x]; lumCount++; }
+            else gone[y * w + x] = 1;
+          }
+        }
+        // Peel off a pale fringe (edge of the photo's shadow) left around a DARK
+        // plate: outer pixels much lighter than the plate's average. A white
+        // plate is never peeled, because its own pixels aren't lighter than it.
+        const plateLum = lumCount ? lumSum / lumCount : 255;
+        for (let pass = 0; pass < 8; pass++) {
+          const peel: number[] = [];
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const i = y * w + x;
+              if (gone[i] || lum[i] < plateLum + 40) continue;
+              if (x === 0 || y === 0 || x === w - 1 || y === h - 1 || gone[i - 1] || gone[i + 1] || gone[i - w] || gone[i + w]) peel.push(i);
+            }
+          }
+          if (!peel.length) break;
+          for (const i of peel) gone[i] = 1;
+        }
+        // Snap to a clean rectangle. Plates are rectangles, so when what's left
+        // fills its box almost completely, use the box itself (with slightly
+        // rounded corners): straight crisp edges, no specks or wavy shadow
+        // fringe. The box is taken from rows / columns that are at least 80%
+        // covered, so a thin fringe doesn't widen it. Other shapes keep the mask.
+        const colCov = new Int32Array(w), rowCov = new Int32Array(h);
+        for (let y = 0; y < h; y++)
+          for (let x = 0; x < w; x++)
+            if (!gone[y * w + x]) { colCov[x]++; rowCov[y]++; }
+        let maxC = 0, maxR = 0;
+        for (let x = 0; x < w; x++) maxC = Math.max(maxC, colCov[x]);
+        for (let y = 0; y < h; y++) maxR = Math.max(maxR, rowCov[y]);
+        let x0 = -1, x1 = -1, y0 = -1, y1 = -1;
+        for (let x = 0; x < w; x++) if (maxC && colCov[x] >= maxC * 0.8) { if (x0 < 0) x0 = x; x1 = x; }
+        for (let y = 0; y < h; y++) if (maxR && rowCov[y] >= maxR * 0.8) { if (y0 < 0) y0 = y; y1 = y; }
+        if (x0 >= 0 && y0 >= 0) {
+          let inBox = 0;
+          for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (!gone[y * w + x]) inBox++;
+          if (inBox / ((x1 - x0 + 1) * (y1 - y0 + 1)) > 0.9) {
+            const r = Math.round(Math.min(x1 - x0, y1 - y0) * 0.015); // corner radius
+            for (let y = 0; y < h; y++) {
+              for (let x = 0; x < w; x++) {
+                let inside = x >= x0 && x <= x1 && y >= y0 && y <= y1;
+                if (inside && r > 0) {
+                  const cx = x < x0 + r ? x0 + r : x > x1 - r ? x1 - r : x;
+                  const cy = y < y0 + r ? y0 + r : y > y1 - r ? y1 - r : y;
+                  if ((x - cx) ** 2 + (y - cy) ** 2 > r * r) inside = false;
+                }
+                gone[y * w + x] = inside ? 0 : 1;
+              }
+            }
+          }
         }
 
         let removed = 0;
         for (let i = 0; i < w * h; i++) {
-          if (!seen[i]) continue;
-          removed++;
+          if (!gone[i]) continue;
           px[i * 4 + 3] = 0; // backdrop and its shadow → fully transparent
+          removed++;
         }
         // Soften the cut edge: half-transparent ring around the removed area.
         for (let y = 1; y < h - 1; y++) {
           for (let x = 1; x < w - 1; x++) {
             const i = y * w + x;
-            if (seen[i]) continue;
-            if (seen[i - 1] || seen[i + 1] || seen[i - w] || seen[i + w]) px[i * 4 + 3] = 190;
+            if (gone[i]) continue;
+            if (gone[i - 1] || gone[i + 1] || gone[i - w] || gone[i + w]) px[i * 4 + 3] = 190;
           }
         }
-        // Nothing (or almost everything) removed → photo isn't a clean cut-out.
-        const ratio = removed / (w * h);
-        if (ratio < 0.08 || ratio > 0.97) return resolve(null);
+        // Almost everything removed → photo isn't a clean product shot.
+        // (Very little removed is fine: the plate simply fills the photo.)
+        if (removed / (w * h) > 0.97) return resolve(null);
 
         ctx.putImageData(data, 0, 0);
         resolve(canvas.toDataURL("image/png"));
@@ -140,15 +243,14 @@ export function WallPreview({ src, name }: { src: string; name: string }) {
   const [wall, setWall] = useState(WALLS[4].hex);
   const [light, setLight] = useState(100); // room brightness %
   const [tone, setTone] = useState(0); // -100 warm … +100 cool
-  const [cut, setCut] = useState<string | null | undefined>(cutoutCache.get(src));
+  // Cut-out result for the photo it was made from; undefined while still working.
+  const [done, setDone] = useState<{ src: string; cut: string | null } | null>(null);
+  const cut = cutoutCache.has(src) ? cutoutCache.get(src) : done?.src === src ? done.cut : undefined;
 
   useEffect(() => {
+    if (cutoutCache.has(src)) return;
     let alive = true;
-    if (cutoutCache.has(src)) setCut(cutoutCache.get(src));
-    else {
-      setCut(undefined);
-      cutOut(src).then((r) => alive && setCut(r));
-    }
+    cutOut(src).then((r) => alive && setDone({ src, cut: r }));
     return () => {
       alive = false;
     };
@@ -184,8 +286,8 @@ export function WallPreview({ src, name }: { src: string; name: string }) {
               src={cut}
               alt={`${name} on a ${wallName.toLowerCase()} wall`}
               className="max-h-full max-w-full object-contain"
-              // Thin contact shadow only, like a plate sitting flush on the wall.
-              style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.25))" }}
+              // Tight contact shadow + soft lift, like a plate mounted on the wall.
+              style={{ filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,0.3)) drop-shadow(0 6px 10px rgba(0,0,0,0.16))" }}
             />
           ) : (
             // Fallback when the photo can't be cut out: multiply blend drops the white backdrop.
