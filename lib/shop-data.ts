@@ -64,6 +64,8 @@ export type ShopProduct = ShopProductCard & {
   specs: { label: string; value: string }[];
   /** Optional warranty set by the office; null = none shown. */
   warranty: { period: string; terms: string | null } | null;
+  /** One of its categories has the "See it on your wall" preview turned on (admin). */
+  wallPreview: boolean;
   images: string[];
   category: { name: string; slug: string } | null;
   subCategory: { name: string; slug: string } | null;
@@ -360,8 +362,15 @@ export async function getNewestProducts(limit = 8) {
   return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
 }
 
+/** Ids of categories with the "See it on your wall" preview on. Empty if the column isn't added yet. */
+const cachedWallPreviewCategoryIds = shopCached(async (): Promise<string[]> => {
+  const { data, error } = await supabaseAdmin.from("web_categories").select("id").eq("wall_preview", true);
+  if (error) return [];
+  return (data || []).map((c: any) => c.id as string);
+}, "wall-preview-categories");
+
 export const getProductBySlug = cache(async (slug: string): Promise<ShopProduct | null> => {
-  const p = await cachedProductBySlug(slug);
+  const [p, wallCats] = await Promise.all([cachedProductBySlug(slug), cachedWallPreviewCategoryIds()]);
   if (!p) return null;
   const [card] = await toCards([p]);
   if (!card) return null;
@@ -370,6 +379,7 @@ export const getProductBySlug = cache(async (slug: string): Promise<ShopProduct 
   const images = (row.images?.length ? row.images : v?.image_url ? [v.image_url] : []) as string[];
   return {
     ...card,
+    wallPreview: card.categoryIds.some((id) => wallCats.includes(id)),
     shortDescription: row.short_description,
     description: row.description,
     specs: (Array.isArray(row.specs) ? row.specs : []).filter((s: any) => s?.label && s?.value),

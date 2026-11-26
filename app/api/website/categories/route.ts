@@ -13,6 +13,7 @@ const schema = z.object({
   description: z.string().nullable().optional(),
   sortOrder: z.coerce.number().int().optional(),
   isActive: z.boolean().optional(),
+  wallPreview: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -39,6 +40,7 @@ export async function GET() {
         description: c.description,
         sortOrder: c.sort_order,
         isActive: c.is_active,
+        wallPreview: !!c.wall_preview,
         productCount: countMap[c.id] || 0,
       })),
     );
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest) {
   try {
     const v = schema.parse(await request.json());
     if (v.id && v.parentId === v.id) throw new Error("A category cannot be its own parent");
-    const row = {
+    const row: Record<string, unknown> = {
       name: v.name,
       slug: await uniqueSlug("web_categories", v.name, v.id),
       parent_id: v.parentId ?? null,
@@ -64,6 +66,8 @@ export async function POST(request: NextRequest) {
       is_active: v.isActive ?? true,
       updated_at: new Date().toISOString(),
     };
+    // Only written when sent, so saving still works before the wall_preview column exists.
+    if (v.wallPreview !== undefined) row.wall_preview = v.wallPreview;
     const q = v.id
       ? supabaseAdmin.from("web_categories").update(row).eq("id", v.id)
       : supabaseAdmin.from("web_categories").insert(row);

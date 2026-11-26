@@ -22,6 +22,8 @@ type Category = {
   description: string | null;
   sortOrder: number;
   isActive: boolean;
+  /** Shop product page shows the "See it on your wall" colour preview. */
+  wallPreview?: boolean;
   productCount: number;
 };
 
@@ -37,7 +39,7 @@ type Family = {
 };
 
 /** One row in any column. */
-type Item = { id: string; name: string; imageUrl: string | null; isActive: boolean; productCount: number; childCount?: number };
+type Item = { id: string; name: string; imageUrl: string | null; isActive: boolean; productCount: number; childCount?: number; wallPreview?: boolean };
 
 type EditTarget = { kind: "category"; data: Category } | { kind: "family"; data: Family };
 
@@ -90,6 +92,7 @@ export default function WebsiteCategoriesPage() {
     imageUrl: c.imageUrl,
     isActive: c.isActive,
     productCount: c.productCount,
+    wallPreview: c.wallPreview,
     childCount: categories.filter((x) => x.parentId === c.id).length,
   });
   const famItem = (f: Family): Item => ({ id: f.id, name: f.name, imageUrl: f.imageUrl, isActive: f.isActive, productCount: f.productCount });
@@ -160,7 +163,7 @@ export default function WebsiteCategoriesPage() {
         const c = edit.data;
         await webApi("/api/website/categories", {
           method: "POST",
-          json: { id: c.id, name: c.name, parentId: c.parentId, imageUrl: c.imageUrl, description: c.description, sortOrder: c.sortOrder, isActive: c.isActive },
+          json: { id: c.id, name: c.name, parentId: c.parentId, imageUrl: c.imageUrl, description: c.description, sortOrder: c.sortOrder, isActive: c.isActive, wallPreview: !!c.wallPreview },
         });
       } else {
         const f = edit.data;
@@ -314,6 +317,22 @@ export default function WebsiteCategoriesPage() {
                   Show on website
                 </label>
               </div>
+              {edit.kind === "category" && (
+                <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+                  <Switch
+                    className="mt-0.5"
+                    checked={!!edit.data.wallPreview}
+                    onCheckedChange={(v) => patchEdit({ wallPreview: v })}
+                  />
+                  <span>
+                    <span className="font-medium">&quot;See it on your wall&quot; preview</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Customers can try the product on different wall colours. Turn on for switches &amp; sockets.
+                      Applies to every product in this category.
+                    </span>
+                  </span>
+                </label>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -481,7 +500,7 @@ function Column({
                         {it.name}
                       </span>
                       <span className={cn("block text-[11px] truncate", selected ? "text-white/75" : "text-muted-foreground")}>
-                        {it.productCount} products{!it.isActive && " · hidden"}
+                        {it.productCount} products{!it.isActive && " · hidden"}{it.wallPreview && " · wall preview"}
                       </span>
                     </span>
 

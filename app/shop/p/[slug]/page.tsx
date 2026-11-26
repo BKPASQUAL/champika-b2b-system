@@ -10,7 +10,6 @@ import { AddToCartButton, ProductBuyBox } from "../../_components/AddToCart";
 import { ItemKindNote } from "../../_components/ItemKindNote";
 import { ProductGrid } from "../../_components/ProductCard";
 import { rs, whatsappLink } from "../../_components/format";
-
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -108,7 +107,11 @@ export default async function ProductPage({ params }: Props) {
       {/* Photo + buying panel */}
       <section className="grid gap-6 rounded-3xl border border-(--s-line) bg-(--s-surface) p-4 shadow-[0_8px_30px_-14px_rgba(15,23,42,0.10)] sm:p-6 md:grid-cols-2 lg:gap-12 lg:p-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <div className="md:sticky md:top-24 md:self-start">
-          <Gallery images={p.images} name={p.name} />
+          <Gallery
+            images={p.images}
+            name={p.name}
+            wallPreview={p.wallPreview}
+          />
         </div>
 
         <div className="flex flex-col">

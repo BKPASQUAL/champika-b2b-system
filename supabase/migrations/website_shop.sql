@@ -585,3 +585,10 @@ END $$;
 -- ============================================================================
 ALTER TABLE web_products ADD COLUMN IF NOT EXISTS warranty_period TEXT;
 ALTER TABLE web_products ADD COLUMN IF NOT EXISTS warranty_terms  TEXT;
+
+-- ============================================================================
+-- 16. "See it on your wall" colour preview (per category)
+--   Products in a category with wall_preview = TRUE get the wall colour
+--   preview on the shop product page. Managed in Office → Website → Categories.
+-- ============================================================================
+ALTER TABLE web_categories ADD COLUMN IF NOT EXISTS wall_preview BOOLEAN NOT NULL DEFAULT FALSE;

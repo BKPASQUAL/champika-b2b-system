@@ -1,10 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { ImageOff } from "lucide-react";
+import { Image as ImageIcon, ImageOff, PaintRoller } from "lucide-react";
+import { WallPreview } from "./WallPreview";
 
-export function Gallery({ images, name, discountPct }: { images: string[]; name: string; discountPct?: number }) {
+export function Gallery({
+  images,
+  name,
+  discountPct,
+  wallPreview,
+}: {
+  images: string[];
+  name: string;
+  discountPct?: number;
+  /** Show the "See it on your wall" colour preview (switches, sockets, wall plates). */
+  wallPreview?: boolean;
+}) {
   const [i, setI] = useState(0);
+  const [mode, setMode] = useState<"photo" | "wall">("photo");
   if (!images.length)
     return (
       <div className="flex aspect-square max-w-[480px] items-center justify-center rounded-3xl border border-(--s-line) bg-(--s-surface) text-slate-300 shadow-[0_4px_24px_-8px_rgba(15,23,42,0.06)]">
@@ -13,6 +26,28 @@ export function Gallery({ images, name, discountPct }: { images: string[]; name:
     );
   return (
     <div className="w-full max-w-[480px] space-y-3 lg:mx-auto">
+      {wallPreview && (
+        <div className="flex rounded-full border border-(--s-line) bg-(--s-soft) p-1 text-sm font-semibold">
+          {([
+            ["photo", "Photo", ImageIcon],
+            ["wall", "See it on your wall", PaintRoller],
+          ] as const).map(([m, label, Icon]) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full px-3 py-1.5 transition ${mode === m ? "bg-(--s-surface) text-(--s-ink) shadow-sm" : "text-(--s-muted) hover:text-(--s-ink)"
+                }`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {wallPreview && mode === "wall" ? (
+        <WallPreview src={images[i]} name={name} />
+      ) : (
       <div className="group relative aspect-square overflow-hidden rounded-3xl border border-(--s-line) bg-(--s-surface) shadow-[0_8px_30px_-10px_rgba(15,23,42,0.08)]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -26,6 +61,7 @@ export function Gallery({ images, name, discountPct }: { images: string[]; name:
           </span>
         )}
       </div>
+      )}
       {images.length > 1 && (
         <div className="flex gap-2.5 overflow-x-auto pb-1">
           {images.map((src, idx) => (
