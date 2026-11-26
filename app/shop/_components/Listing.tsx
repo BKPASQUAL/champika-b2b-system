@@ -94,17 +94,9 @@ export async function Listing({
     s.has(v) ? s.delete(v) : s.add(v);
     return [...s].join(",") || null;
   };
-  // Applied filters as removable chips (shoppers should always see what is narrowing the list).
+  // Filters that have no chip of their own (price, in-page search) are shown as removable chips.
+  const hasChipFilters = brandSlugs.length + subSlugs.length + familyIds.length > 0;
   const applied: { key: string; label: string; href: string }[] = [
-    ...facets.families
-      .filter((f) => familyIds.includes(f.id))
-      .map((f) => ({ key: `f-${f.id}`, label: f.name, href: url({ family: toggle(familyIds, f.id) }) })),
-    ...facets.brands
-      .filter((b) => brandSlugs.includes(b.slug))
-      .map((b) => ({ key: `b-${b.id}`, label: b.name, href: url({ brand: toggle(brandSlugs, b.slug), sub: null }) })),
-    ...facets.subBrands
-      .filter((b) => subSlugs.includes(b.slug))
-      .map((b) => ({ key: `s-${b.id}`, label: b.name, href: url({ sub: toggle(subSlugs, b.slug) }) })),
     ...(min || max
       ? [{ key: "price", label: min && max ? `${rs(min)} – ${rs(max)}` : min ? `From ${rs(min)}` : `Up to ${rs(max)}`, href: url({ min: null, max: null }) }]
       : []),
@@ -133,12 +125,34 @@ export async function Listing({
   const chipLine = (chips: React.ReactNode) => (
     <div className="shop-noscroll -mx-4 flex items-center gap-2 overflow-x-auto px-4 py-0.5 md:mx-0 md:flex-wrap md:overflow-visible md:px-0">{chips}</div>
   );
-  const showTypes = facets.families.length > 0;
   const showBrands = !hideBrandFilter && facets.brands.length > 0;
-  // Sub brands appear once their brand is picked (on a brand page, straight away).
-  const selectedBrandIds = new Set(facets.brands.filter((b) => brandSlugs.includes(b.slug)).map((b) => b.id));
+  // Ranges (sub brands, e.g. Orange → Akoya, Sigma) appear once their brand is picked (on a brand page, straight away).
+  const selectedBrands = facets.brands.filter((b) => brandSlugs.includes(b.slug));
+  const selectedBrandIds = new Set(selectedBrands.map((b) => b.id));
   const subBrands = facets.subBrands.filter((s) => (hideBrandFilter ? s.count < all.length || facets.subBrands.length > 1 : selectedBrandIds.has(s.parentId)));
+  const brandName = (id: string) => facets.brands.find((b) => b.id === id)?.name || "";
+  // A range named like its brand ("Orange › Orange") reads as a duplicate, so call it "Other Orange".
+  const rangeLabel = (s: { name: string; parentId: string }) => {
+    const parent = brandName(s.parentId);
+    return parent && s.name.trim().toLowerCase() === parent.trim().toLowerCase() ? `Other ${parent}` : s.name;
+  };
+  const rangeBrand = hideBrandFilter ? facets.brands[0]?.name : selectedBrands.length === 1 ? selectedBrands[0].name : "";
+  const rangeAllCount = hideBrandFilter ? all.length : selectedBrands.reduce((n, b) => n + b.count, 0);
+
+  // Product types counted within the chosen brand / range, so a type never leads to an empty page.
+  const subIdsSel = new Set(facets.subBrands.filter((s) => subSlugs.includes(s.slug)).map((s) => s.id));
+  const typeCount: Record<string, number> = {};
+  for (const p of all) {
+    if (selectedBrandIds.size && !(p.brandId && selectedBrandIds.has(p.brandId))) continue;
+    if (subIdsSel.size && !(p.subBrandId && subIdsSel.has(p.subBrandId))) continue;
+    if (p.familyId) typeCount[p.familyId] = (typeCount[p.familyId] || 0) + 1;
+  }
+  const types = facets.families
+    .map((f) => ({ ...f, count: typeCount[f.id] || 0 }))
+    .filter((f) => f.count > 0 || familyIds.includes(f.id));
+  const showTypes = types.length > 1 || familyIds.length > 0;
   const sortLabel = SORT_OPTIONS.find((o) => o.key === sort)?.label;
+  const clearAllHref = url({ brand: null, sub: null, family: null, min: null, max: null, find: null });
 
   return (
     <ListingNavProvider>
@@ -238,46 +252,62 @@ export async function Listing({
 
               </div>
 
-              {/* Line 1: product types · Line 2: brands */}
+              {/* Brand (with its ranges right under it) · product type */}
               {(showTypes || showBrands || subBrands.length > 0) && (
-                <div className="min-w-0 space-y-2.5 border-t border-(--s-line) pt-3.5">
-                  {showTypes &&
-                    chipLine(
-                      <>
-                        <RowLabel>Type</RowLabel>
-                        <TypeChip href={url({ family: null })} on={!familyIds.length} label="All" />
-                        {facets.families.map((f) => (
-                          <TypeChip key={f.id} href={url({ family: toggle(familyIds, f.id) })} on={familyIds.includes(f.id)} label={f.name} count={f.count} />
-                        ))}
-                      </>,
-                    )}
+                <div className="min-w-0 space-y-3 border-t border-(--s-line) pt-3.5">
                   {showBrands &&
                     chipLine(
                       <>
                         <RowLabel>Brand</RowLabel>
                         <BrandChip href={url({ brand: null, sub: null })} on={!brandSlugs.length} label="All brands" />
                         {facets.brands.map((b) => (
-                          <BrandChip key={b.id} href={url({ brand: toggle(brandSlugs, b.slug), sub: null })} on={brandSlugs.includes(b.slug)} label={b.name} logo={b.logoUrl} />
+                          <BrandChip
+                            key={b.id}
+                            href={url({ brand: toggle(brandSlugs, b.slug), sub: null })}
+                            on={brandSlugs.includes(b.slug)}
+                            label={b.name}
+                            logo={b.logoUrl}
+                            count={b.count}
+                          />
                         ))}
                       </>,
                     )}
-                  {subBrands.length > 0 &&
+                  {subBrands.length > 0 && (
+                    <div className={hideBrandFilter ? "" : "md:pl-24"}>
+                      <div className="rounded-xl bg-(--s-soft) p-2.5 ring-1 ring-inset ring-(--s-line)">
+                        <p className="mb-2 px-1 text-[13px] font-semibold text-(--s-ink-2)">
+                          {rangeBrand ? `Choose a ${rangeBrand} range` : "Choose a range"}
+                        </p>
+                        <div className="shop-noscroll -mx-2.5 flex items-center gap-2 overflow-x-auto px-2.5 md:mx-0 md:flex-wrap md:overflow-visible md:px-0">
+                          <TypeChip
+                            href={url({ sub: null })}
+                            on={!subSlugs.length}
+                            label={rangeBrand ? `All ${rangeBrand}` : "All ranges"}
+                            count={rangeAllCount}
+                          />
+                          {subBrands.map((s) => (
+                            <TypeChip key={s.id} href={url({ sub: toggle(subSlugs, s.slug) })} on={subSlugs.includes(s.slug)} label={rangeLabel(s)} count={s.count} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {showTypes &&
                     chipLine(
                       <>
-                        <RowLabel>Sub brand</RowLabel>
-                        <TypeChip href={url({ sub: null })} on={!subSlugs.length} label="All" />
-                        {subBrands.map((s) => (
-                          <TypeChip key={s.id} href={url({ sub: toggle(subSlugs, s.slug) })} on={subSlugs.includes(s.slug)} label={s.name} count={s.count} />
+                        <RowLabel>Product type</RowLabel>
+                        <TypeChip href={url({ family: null })} on={!familyIds.length} label="All types" />
+                        {types.map((f) => (
+                          <TypeChip key={f.id} href={url({ family: toggle(familyIds, f.id) })} on={familyIds.includes(f.id)} label={f.name} count={f.count} />
                         ))}
                       </>,
                     )}
                 </div>
               )}
 
-              {/* Applied filters: each one removable on its own, plus "Clear all" */}
-              {applied.length > 0 && (
+              {/* Price / in-page search filters (no chip of their own) + one "Clear filters" button */}
+              {(applied.length > 0 || hasChipFilters) && (
                 <div className="flex flex-wrap items-center gap-2 border-t border-(--s-line) pt-3.5">
-                  <RowLabel>Applied</RowLabel>
                   {applied.map((a) => (
                     <NavLink
                       key={a.key}
@@ -291,11 +321,12 @@ export async function Listing({
                     </NavLink>
                   ))}
                   <NavLink
-                    href={url({ brand: null, sub: null, family: null, min: null, max: null, find: null })}
+                    href={clearAllHref}
                     scroll={false}
-                    className="ml-1 text-[13.5px] font-semibold text-(--s-muted) underline-offset-4 transition hover:text-(--s-ink) hover:underline"
+                    className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13.5px] font-semibold text-(--s-ink-2) ring-1 ring-inset ring-(--s-line) transition hover:bg-(--s-soft) hover:text-(--s-ink)"
                   >
-                    Clear all
+                    <X className="h-3.5 w-3.5" />
+                    Clear filters
                   </NavLink>
                 </div>
               )}
@@ -360,7 +391,7 @@ function TypeChip({ href, on, label, count }: { href: string; on: boolean; label
 }
 
 /** Brand chip (line 2): logo when there is one, electric blue gradient when chosen. */
-function BrandChip({ href, on, label, logo }: { href: string; on: boolean; label: string; logo?: string | null }) {
+function BrandChip({ href, on, label, logo, count }: { href: string; on: boolean; label: string; logo?: string | null; count?: number }) {
   return (
     <NavLink
       href={href}
@@ -372,10 +403,18 @@ function BrandChip({ href, on, label, logo }: { href: string; on: boolean; label
       }`}
     >
       {logo && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={logo} alt="" className="h-5 max-w-14 object-contain" />
+        // White plate behind the logo so it stays readable on the blue "chosen" chip.
+        <span className="-ml-2 flex h-7 items-center rounded-full bg-white px-1.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={logo} alt="" className="h-5 max-w-14 object-contain" />
+        </span>
       )}
       <span>{label}</span>
+      {count !== undefined && !on && (
+        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-(--s-surface) px-1.5 text-[12.5px] font-bold leading-none text-(--s-muted) ring-1 ring-(--s-line)">
+          {count}
+        </span>
+      )}
       {on && label !== "All brands" && <Check className="h-3.5 w-3.5 stroke-[2.5]" />}
     </NavLink>
   );
@@ -450,5 +489,5 @@ function MiniCategory({ href, label, on }: { href: string; label: string; on: bo
 
 /** Small label in front of a chip row ("Type", "Brand", "Applied"). */
 function RowLabel({ children }: { children: React.ReactNode }) {
-  return <span className="w-20 shrink-0 text-[12px] font-bold uppercase tracking-wider text-(--s-muted)">{children}</span>;
+  return <span className="w-24 shrink-0 text-[13.5px] font-semibold text-(--s-ink-2)">{children}</span>;
 }
