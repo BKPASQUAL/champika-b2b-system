@@ -356,12 +356,17 @@ export default function WebsiteProductEditor() {
                     placeholder="Required"
                     value={d.webPrice}
                     onChange={(e) => set({ webPrice: e.target.value })}
-                    className={d.webPrice === "" ? "border-red-300" : ""}
+                    className={d.webPrice === "" || normal?.clampedToCost ? "border-red-300" : ""}
                   />
                   {d.webPrice !== "" && normal && (
-                    <span className={`text-[11px] block ${normal.price < cost ? "text-red-600" : "text-muted-foreground"}`}>
-                      margin {rs(normal.price - cost)}
-                    </span>
+                    normal.clampedToCost ? (
+                      // The shop never sells below cost: say plainly what it will show instead.
+                      <span className="text-[11px] block text-red-600 font-medium">
+                        Below cost ({rs(cost)}) — shop will show {rs(normal.price)}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] block text-muted-foreground">margin {rs(normal.price - cost)}</span>
+                    )
                   )}
                   {d.linked?.sellingPrice ? (
                     Number(d.webPrice) === Number(d.linked.sellingPrice) ? (
@@ -381,7 +386,12 @@ export default function WebsiteProductEditor() {
                 <div className="space-y-1">
                   <Label>Trade price</Label>
                   <Input type="number" placeholder={trade ? String(trade.price) : "auto"} value={d.tradePrice} onChange={(e) => set({ tradePrice: e.target.value })} />
-                  {trade && <span className="text-[11px] block text-muted-foreground">= {rs(trade.price)}</span>}
+                  {trade &&
+                    (trade.clampedToCost ? (
+                      <span className="text-[11px] block text-red-600 font-medium">Below cost — shop will show {rs(trade.price)}</span>
+                    ) : (
+                      <span className="text-[11px] block text-muted-foreground">= {rs(trade.price)}</span>
+                    ))}
                 </div>
                 <div className="space-y-1">
                   <Label>In stock</Label>
