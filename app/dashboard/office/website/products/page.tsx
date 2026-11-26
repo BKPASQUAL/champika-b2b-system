@@ -199,10 +199,16 @@ export default function WebsiteProductsPage() {
                     <span className={`block text-xs ${margin < 0 ? "text-red-600" : "text-green-700"}`}>
                       {rs(margin)} ({marginPct.toFixed(0)}%)
                     </span>
-                    {(v.normalPrice.clampedToCost || v.tradePriceResolved.clampedToCost) && (
-                      <span className="text-[10px] text-amber-600 flex items-center justify-end gap-0.5">
-                        <AlertTriangle className="h-3 w-3" /> rule below cost
+                    {v.normalPrice.belowCost || v.tradePriceResolved.belowCost ? (
+                      <span className="text-[10px] text-red-600 font-medium flex items-center justify-end gap-0.5">
+                        <AlertTriangle className="h-3 w-3" /> selling below cost
                       </span>
+                    ) : (
+                      (v.normalPrice.clampedToCost || v.tradePriceResolved.clampedToCost) && (
+                        <span className="text-[10px] text-amber-600 flex items-center justify-end gap-0.5">
+                          <AlertTriangle className="h-3 w-3" /> rule below cost
+                        </span>
+                      )
                     )}
                   </td>
                   <td className={`p-3 text-right ${v.main.stock <= 0 ? "text-red-600 font-medium" : ""}`}>{v.main.stock}</td>

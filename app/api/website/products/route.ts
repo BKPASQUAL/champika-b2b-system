@@ -186,7 +186,13 @@ export async function GET(request: NextRequest) {
           minMarginPct: vs.length
             ? Math.min(...vs.map((v) => (v.normalPrice.price > 0 ? ((v.normalPrice.price - v.unitCost) / v.normalPrice.price) * 100 : 0)))
             : 0,
-          belowCostWarning: vs.some((v) => v.normalPrice.clampedToCost || v.tradePriceResolved.clampedToCost),
+          belowCostWarning: vs.some(
+            (v) =>
+              v.normalPrice.clampedToCost ||
+              v.tradePriceResolved.clampedToCost ||
+              v.normalPrice.belowCost ||
+              v.tradePriceResolved.belowCost,
+          ),
           zeroStockCount: vs.filter((v) => v.main.stock <= 0).length,
         },
       };

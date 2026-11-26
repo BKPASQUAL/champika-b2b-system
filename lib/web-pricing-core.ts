@@ -37,8 +37,12 @@ export type ResolvedPrice = {
   discountPct: number;      // % off MRP, for the badge (0 when none)
   source: "override" | "web_category" | "web_brand" | "category" | "brand" | "mrp";
   ruleId?: string;
-  /** Staff-only: price was pushed up to cost because a rule went below it. */
+  /** Staff-only: price was pushed up to cost because a RULE went below it. */
   clampedToCost: boolean;
+  /** Staff-only: the final price is below cost (a price typed in by staff — allowed, but warned). */
+  belowCost: boolean;
+  /** Cost of one web unit (0 when unknown), for "loss Rs X" warnings. */
+  cost: number;
 };
 
 const SCOPE_ORDER: WebPriceRule["scope"][] = ["web_category", "web_brand", "category", "brand"];
@@ -77,7 +81,9 @@ function findRule(
  * Website price for ONE web unit.
  * Order: item override → web category rule → website brand rule → main category rule → main brand rule → MRP.
  * Trade customers with no trade-specific price fall back to the normal price.
- * The price never goes below cost.
+ * A price from a RULE never goes below cost (it is raised to cost). A price
+ * typed in by staff (override) is used as entered, even below cost — the
+ * admin only shows a warning (`belowCost`).
  */
 export function resolveWebPrice(
   web: WebProductPriceInput,
@@ -89,7 +95,7 @@ export function resolveWebPrice(
   const mrp = round(Number(web.mrp ?? (main.mrp != null ? Number(main.mrp) * mult : 0)) || 0);
   const cost = (Number(main.cost_price) || 0) * mult;
 
-  const pick = (t: PriceTier): Omit<ResolvedPrice, "discountPct" | "clampedToCost" | "mrp"> | null => {
+  const pick = (t: PriceTier): Omit<ResolvedPrice, "discountPct" | "clampedToCost" | "belowCost" | "cost" | "mrp"> | null => {
     const override = t === "trade" ? web.trade_price : web.web_price;
     if (override != null && Number(override) > 0) return { price: Number(override), source: "override" };
 
@@ -107,13 +113,14 @@ export function resolveWebPrice(
 
   let price = round(chosen.price);
   let clampedToCost = false;
-  if (cost > 0 && price < cost) {
+  if (cost > 0 && price < cost && chosen.source !== "override") {
     price = Math.ceil(cost);
     clampedToCost = true;
   }
   if (mrp > 0 && price > mrp && chosen.source !== "override") price = mrp;
+  const belowCost = cost > 0 && price < cost;
 
   const discountPct = mrp > 0 && price < mrp ? Math.round(((mrp - price) / mrp) * 100) : 0;
-  return { mrp, price, discountPct, source: chosen.source, ruleId: chosen.ruleId, clampedToCost };
+  return { mrp, price, discountPct, source: chosen.source, ruleId: chosen.ruleId, clampedToCost, belowCost, cost };
 }
 

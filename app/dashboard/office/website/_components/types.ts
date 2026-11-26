@@ -4,6 +4,9 @@ export type Resolved = {
   discountPct: number;
   source: string;
   clampedToCost: boolean;
+  /** Typed-in price below cost: allowed (shop sells at a loss), shown as a warning. */
+  belowCost?: boolean;
+  cost?: number;
 };
 
 export type VariantMain = {

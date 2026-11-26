@@ -356,11 +356,15 @@ export default function WebsiteProductEditor() {
                     placeholder="Required"
                     value={d.webPrice}
                     onChange={(e) => set({ webPrice: e.target.value })}
-                    className={d.webPrice === "" || normal?.clampedToCost ? "border-red-300" : ""}
+                    className={d.webPrice === "" || normal?.clampedToCost || normal?.belowCost ? "border-red-300" : ""}
                   />
                   {d.webPrice !== "" && normal && (
-                    normal.clampedToCost ? (
-                      // The shop never sells below cost: say plainly what it will show instead.
+                    normal.belowCost ? (
+                      // Allowed: the shop sells at this price. Just warn about the loss.
+                      <span className="text-[11px] block text-red-600 font-medium">
+                        ⚠ Below cost ({rs(cost)}) — selling at a loss of {rs(cost - normal.price)}
+                      </span>
+                    ) : normal.clampedToCost ? (
                       <span className="text-[11px] block text-red-600 font-medium">
                         Below cost ({rs(cost)}) — shop will show {rs(normal.price)}
                       </span>
@@ -387,7 +391,11 @@ export default function WebsiteProductEditor() {
                   <Label>Trade price</Label>
                   <Input type="number" placeholder={trade ? String(trade.price) : "auto"} value={d.tradePrice} onChange={(e) => set({ tradePrice: e.target.value })} />
                   {trade &&
-                    (trade.clampedToCost ? (
+                    (trade.belowCost ? (
+                      <span className="text-[11px] block text-red-600 font-medium">
+                        ⚠ {rs(trade.price)} — below cost, loss {rs(cost - trade.price)}
+                      </span>
+                    ) : trade.clampedToCost ? (
                       <span className="text-[11px] block text-red-600 font-medium">Below cost — shop will show {rs(trade.price)}</span>
                     ) : (
                       <span className="text-[11px] block text-muted-foreground">= {rs(trade.price)}</span>

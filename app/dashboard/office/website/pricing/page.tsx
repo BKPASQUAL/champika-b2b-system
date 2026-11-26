@@ -136,7 +136,7 @@ export default function PriceRulesPage() {
           <h2 className="text-2xl font-bold tracking-tight">Price Rules</h2>
           <p className="text-muted-foreground text-sm max-w-2xl">
             Set website prices by brand or category. Order used: item’s own price → website category rule → main category
-            rule → brand rule → MRP. Prices never go below cost. Trade customers fall back to normal rules when no trade rule exists.
+            rule → brand rule → MRP. Rule prices never go below cost (an item’s own typed-in price can — it is shown with a warning). Trade customers fall back to normal rules when no trade rule exists.
           </p>
         </div>
         <Button className="bg-teal-600 hover:bg-teal-700" onClick={() => setForm({ ...emptyRule })}>
