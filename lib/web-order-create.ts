@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { nextRunningNo } from "@/lib/web-utils";
+import { getRequestSite, SITE_ORDER_PREFIX } from "@/lib/web-site";
 import type { ShopAddress } from "@/lib/shop-address";
 
 /** One order line with its final price (already checked by the caller). */
@@ -16,7 +17,8 @@ export type OrderLine = {
 /**
  * Insert a website order + its lines. Used by checkout and by accepted
  * quotations, so both create orders exactly the same way.
- * Order numbers WEB-000001…; a clash with a simultaneous order is retried.
+ * Order numbers WEB-000001… (BK) / CHW-000001… (Champika); a clash with a
+ * simultaneous order is retried.
  */
 export async function insertWebOrder(input: {
   customerId: string;
@@ -33,12 +35,14 @@ export async function insertWebOrder(input: {
   const total = subtotal - discount + input.deliveryFee;
   const address = { line1: input.delivery.line1, line2: input.delivery.line2 || "", city: input.delivery.city, district: input.delivery.district };
 
+  const site = await getRequestSite();
   let order: { id: string; web_order_no: string } | null = null;
   for (let attempt = 0; attempt < 4 && !order; attempt++) {
-    const no = await nextRunningNo("web_orders", "web_order_no", "WEB");
+    const no = await nextRunningNo("web_orders", "web_order_no", SITE_ORDER_PREFIX[site]);
     const { data, error } = await supabaseAdmin
       .from("web_orders")
       .insert({
+        site,
         web_order_no: no,
         web_customer_id: input.customerId,
         delivery_name: input.delivery.name,

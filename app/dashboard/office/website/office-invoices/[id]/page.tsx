@@ -13,15 +13,17 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { downloadInvoice, printHalfPageInvoice, printInvoice } from "@/app/lib/invoice-print";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { useWebPortal } from "@/app/dashboard/office/website/_site";
 
 const lkr = (n: number) => `LKR ${Number(n || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const statusTone = (s: string) =>
   s === "Paid" ? "bg-green-100 text-green-700 border-green-200" : s === "Partial" ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-red-100 text-red-700 border-red-200";
 
-/** One BK Wiring invoice: print with the BK Wiring header and take payments. */
+/** One shop invoice: print with the shop's header and take payments. */
 export default function BkWiringInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { base, shopName, division } = useWebPortal();
   const [inv, setInv] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [payOpen, setPayOpen] = useState(false);
@@ -85,7 +87,7 @@ export default function BkWiringInvoicePage({ params }: { params: Promise<{ id: 
   return (
     <div className="space-y-5 pb-6">
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard/office/website/office-invoices")}>
+        <Button variant="ghost" size="icon" onClick={() => router.push(`${base}/office-invoices`)}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1 min-w-0">
@@ -93,12 +95,12 @@ export default function BkWiringInvoicePage({ params }: { params: Promise<{ id: 
             <h1 className="text-2xl font-bold font-mono">{inv.invoiceNo}</h1>
             <Badge className={statusTone(status)}>{status}</Badge>
           </div>
-          <p className="text-sm text-muted-foreground">{inv.date ? new Date(inv.date).toLocaleDateString("en-GB") : ""} · BK Wiring invoice</p>
+          <p className="text-sm text-muted-foreground">{inv.date ? new Date(inv.date).toLocaleDateString("en-GB") : ""} · {shopName} invoice</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => printInvoice(id, "website")}><Printer className="w-4 h-4 mr-1.5" /> Print A4</Button>
-          <Button variant="outline" size="sm" onClick={() => printHalfPageInvoice(id, "website")}><Printer className="w-4 h-4 mr-1.5" /> Print Half</Button>
-          <Button variant="outline" size="sm" onClick={() => downloadInvoice(id, "website")}><Download className="w-4 h-4 mr-1.5" /> PDF</Button>
+          <Button variant="outline" size="sm" onClick={() => printInvoice(id, division)}><Printer className="w-4 h-4 mr-1.5" /> Print A4</Button>
+          <Button variant="outline" size="sm" onClick={() => printHalfPageInvoice(id, division)}><Printer className="w-4 h-4 mr-1.5" /> Print Half</Button>
+          <Button variant="outline" size="sm" onClick={() => downloadInvoice(id, division)}><Download className="w-4 h-4 mr-1.5" /> PDF</Button>
           {due > 0.01 && (
             <Button size="sm" className="bg-teal-600 hover:bg-teal-700" onClick={() => { setPayAmount(due.toFixed(2)); setPayOpen(true); }}>
               <Wallet className="w-4 h-4 mr-1.5" /> Record Payment

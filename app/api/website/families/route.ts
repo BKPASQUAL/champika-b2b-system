@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError, slugify } from "@/lib/web-utils";
+import { withSite } from "@/lib/web-site";
 import { refreshShop } from "@/lib/shop-cache";
 
 const schema = z.object({
@@ -18,10 +19,11 @@ const schema = z.object({
 export async function GET() {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const [{ data, error }, { data: prods }] = await Promise.all([
-      supabaseAdmin.from("web_product_families").select("*, web_categories(name)").order("sort_order").order("name"),
-      supabaseAdmin.from("web_products").select("web_family_id"),
+      supabaseAdmin.from("web_product_families").select("*, web_categories(name)").eq("site", site).order("sort_order").order("name"),
+      supabaseAdmin.from("web_products").select("web_family_id").eq("site", site),
     ]);
     if (error) throw error;
     const countMap: Record<string, number> = {};
@@ -48,11 +50,12 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const v = schema.parse(await request.json());
     // Slug must be unique; add a number when the same family name is used twice.
     let slug = slugify(v.name);
-    const { data: same } = await supabaseAdmin.from("web_product_families").select("id, slug").ilike("slug", `${slug}%`);
+    const { data: same } = await supabaseAdmin.from("web_product_families").select("id, slug").eq("site", site).ilike("slug", `${slug}%`);
     const taken = new Set((same || []).filter((r: any) => r.id !== v.id).map((r: any) => r.slug));
     for (let i = 2; taken.has(slug); i++) slug = `${slugify(v.name)}-${i}`;
 
@@ -67,8 +70,8 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await (v.id
-      ? supabaseAdmin.from("web_product_families").update(row).eq("id", v.id)
-      : supabaseAdmin.from("web_product_families").insert(row)
+      ? supabaseAdmin.from("web_product_families").update(row).eq("site", site).eq("id", v.id)
+      : supabaseAdmin.from("web_product_families").insert(withSite(row, site))
     )
       .select()
       .single();
@@ -83,10 +86,11 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   const id = request.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
   try {
-    const { error } = await supabaseAdmin.from("web_product_families").delete().eq("id", id);
+    const { error } = await supabaseAdmin.from("web_product_families").delete().eq("site", site).eq("id", id);
     if (error) throw error;
     refreshShop();
     return NextResponse.json({ success: true });

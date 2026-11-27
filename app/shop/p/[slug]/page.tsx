@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeftRight, BadgeCheck, ChevronRight, MessageCircle, ShieldCheck, Truck, Wallet } from "lucide-react";
-import { getProductBySlug, getRelatedProducts, getShopBase, getStoreInfo } from "@/lib/shop-data";
+import { getProductBySlug, getRelatedProducts, getShopBase, getShopSite, getShopUrl, getStoreInfo } from "@/lib/shop-data";
+import { siteProfile } from "../../_components/site-profile";
 import { brandLabelFor, getAlternatives } from "@/lib/web-compare";
-import { SHOP_URL } from "@/lib/shop-host";
 import { Gallery } from "../../_components/Gallery";
 import { AddToCartButton, ProductBuyBox } from "../../_components/AddToCart";
 import { ItemKindNote } from "../../_components/ItemKindNote";
@@ -13,9 +13,13 @@ import { rs, whatsappLink } from "../../_components/format";
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const p = await getProductBySlug((await params).slug);
+  const [p, site] = await Promise.all([getProductBySlug((await params).slug), getShopSite()]);
   if (!p) return { title: "Product not found" };
-  const desc = p.shortDescription || `${p.name} — buy online at a discount price with fast delivery in the Galle area.`;
+  const desc =
+    p.shortDescription ||
+    (site === "champika"
+      ? `${p.name} — wholesale price, carton rates and delivery ${siteProfile(site).deliveryWhere}.`
+      : `${p.name} — buy online at a discount price with fast delivery in the Galle area.`);
   return {
     title: p.name,
     description: desc.slice(0, 160),
@@ -25,7 +29,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ProductPage({ params }: Props) {
-  const [{ slug }, base, store] = await Promise.all([params, getShopBase(), getStoreInfo()]);
+  const [{ slug }, base, store, SHOP_URL, site] = await Promise.all([params, getShopBase(), getStoreInfo(), getShopUrl(), getShopSite()]);
+  const profile = siteProfile(site);
   const p = await getProductBySlug(slug);
   if (!p) notFound();
   const [related, others, myBrand] = await Promise.all([
@@ -80,7 +85,7 @@ export default async function ProductPage({ params }: Props) {
 
   const trust = [
     { icon: ShieldCheck, title: "Genuine product", text: "Original stock from authorised dealers" },
-    { icon: Truck, title: "Galle area delivery", text: "Fast doorstep delivery across Galle & suburbs" },
+    { icon: Truck, title: profile.deliveryBadge, text: profile.deliveryLine },
     { icon: Wallet, title: "Cash on delivery", text: "Or pay by bank transfer" },
   ];
 

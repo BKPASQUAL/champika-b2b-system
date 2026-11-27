@@ -1,9 +1,15 @@
-// Small fetch helper for the website portal pages.
+import { SITE_HEADER } from "@/lib/web-site-core";
+import { portalSite } from "../_site";
+
+// Small fetch helper for the website portal pages. Sends which shop (BK / Champika) this portal manages.
 export async function webApi<T = any>(url: string, init?: RequestInit & { json?: unknown }): Promise<T> {
   const { json, ...rest } = init || {};
+  const headers = new Headers(rest.headers);
+  headers.set(SITE_HEADER, portalSite());
+  if (json !== undefined) headers.set("Content-Type", "application/json");
   const res = await fetch(url, {
     ...rest,
-    headers: json !== undefined ? { "Content-Type": "application/json", ...(rest.headers || {}) } : rest.headers,
+    headers,
     body: json !== undefined ? JSON.stringify(json) : rest.body,
   });
   const data = await res.json().catch(() => ({}));

@@ -10,6 +10,7 @@ import { apiError } from "@/lib/web-utils";
 export async function GET(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const sp = request.nextUrl.searchParams;
     const status = sp.get("status") || "open";
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
       .from("web_orders")
       .select(
         "id, web_order_no, created_at, status, payment_method, payment_status, total, delivery_name, delivery_phone, delivery_address, order_id, web_order_items(qty)",
-      )
+      ).eq("site", site)
       .order("created_at", { ascending: false })
       .limit(300);
     if (status === "open") query = query.not("status", "in", "(Delivered,Cancelled)");
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     const [{ data, error }, { data: counts }] = await Promise.all([
       query,
-      supabaseAdmin.from("web_orders").select("status, payment_status"),
+      supabaseAdmin.from("web_orders").select("status, payment_status").eq("site", site),
     ]);
     if (error) throw error;
 

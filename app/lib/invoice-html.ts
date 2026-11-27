@@ -158,6 +158,7 @@ export const DIVISIONS: Record<string, DivisionConfig> = {
   orange:       { division: "Orange Agency",          address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
   sierra:       { division: "Sierra Division",        address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
   wireman:      { division: "Wireman Division",       address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
+  online:       { division: "Online Wholesale",       address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
   website:      { division: "bkwiringbadukade.lk",    address: "Pranawatta Road, Wallabada, Boossa", tel: "076-2873921", brand: "BK WIRING BADUKADE", logo: "/bk-wiring-logo.png" },
   admin:        { division: "Head Office",            address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
 };

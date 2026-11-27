@@ -16,6 +16,7 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getProducts, type ShopProductCard } from "@/lib/shop-data";
 import { searchKey } from "@/lib/web-search";
+import { getRequestSite } from "@/lib/web-site";
 
 // Same sizes as lib/web-search.ts (WIRE_SIZES), first spelling = standard.
 const SIZE_GROUPS: string[][] = [
@@ -45,7 +46,7 @@ export type BrandWords = string[];
 
 /** Brand + sub brand (range) names, lower case, longest first. */
 export async function getBrandWords(): Promise<BrandWords> {
-  const { data } = await supabaseAdmin.from("web_brands").select("name");
+  const { data } = await supabaseAdmin.from("web_brands").select("name").eq("site", await getRequestSite());
   const words = new Set<string>();
   for (const b of data || []) {
     const n = String(b.name || "").toLowerCase().trim();
@@ -126,6 +127,7 @@ async function brandInfo(): Promise<Map<string, BrandInfo>> {
   const { data } = await supabaseAdmin
     .from("web_brands")
     .select("id, name, parent_id, logo_url, description, sort_order, is_active")
+    .eq("site", await getRequestSite())
     .order("sort_order")
     .order("name");
   return new Map(
@@ -245,7 +247,7 @@ function groupOf(p: ShopProductCard, catName: Map<string, string>) {
   return catName.get(p.categoryIds[1] || "") || catName.get(p.categoryIds[0] || "") || "Other items";
 }
 async function categoryNames() {
-  const { data } = await supabaseAdmin.from("web_categories").select("id, name");
+  const { data } = await supabaseAdmin.from("web_categories").select("id, name").eq("site", await getRequestSite());
   return new Map((data || []).map((c: any) => [c.id as string, c.name as string]));
 }
 

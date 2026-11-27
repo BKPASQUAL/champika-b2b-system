@@ -26,12 +26,14 @@ import {
   getProducts,
   getPromoStrip,
   getShopBase,
+  getShopSite,
   getStoreInfo,
   sortProducts,
   type PromoStripItem,
   type ShopProductCard,
 } from "@/lib/shop-data";
 import { ProductCard } from "./_components/ProductCard";
+import { ChampikaHome } from "./_components/ChampikaHome";
 import { HeroFeature } from "./_components/HeroFeature";
 import { ScrollRow } from "./_components/ScrollRow";
 import { AllCategories } from "./_components/AllCategories";
@@ -55,6 +57,9 @@ const BADGE_RING = { red: "ring-red-500", orange: "ring-orange-400", green: "rin
 const wrap = "mx-auto px-4 md:px-6 xl:px-10";
 
 export default async function ShopHome() {
+  // Champika Hardware & Distribution has its own (wholesale) home page.
+  if ((await getShopSite()) === "champika") return <ChampikaHome />;
+
   const [base, tree, banners, all, brands, store, promos, delivery, t] = await Promise.all([
     getShopBase(),
     getCategoryTree(),

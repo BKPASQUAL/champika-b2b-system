@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { webApi } from "./api";
 import type { WebBrand } from "./types";
+import { useWebPortal } from "@/app/dashboard/office/website/_site";
 
 export type WarrantyPreset = { id: string; name: string; period: string; brandId: string | null; terms: string };
 
@@ -47,6 +48,7 @@ export function WarrantyCard({
   brands: WebBrand[];
   onChange: (patch: { warrantyPeriod?: string; warrantyTerms?: string }) => void;
 }) {
+  const portalHome = useWebPortal().base;
   const [presets, setPresets] = useState<WarrantyPreset[]>([]);
   const [customMode, setCustomMode] = useState(false);
 
@@ -100,7 +102,7 @@ export function WarrantyCard({
           <p className="text-xs text-muted-foreground mt-1">Shown on the shop product page with its terms.</p>
         </div>
         <Link
-          href="/dashboard/office/website/warranties"
+          href={`${portalHome}/warranties`}
           target="_blank"
           className="text-[11px] text-teal-700 hover:underline flex items-center gap-1 shrink-0"
         >

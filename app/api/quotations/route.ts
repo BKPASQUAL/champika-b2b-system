@@ -84,8 +84,9 @@ export async function POST(request: NextRequest) {
     if (!customerId) return NextResponse.json({ error: "Customer is required" }, { status: 400 });
     if (!items || items.length === 0) return NextResponse.json({ error: "At least one item is required" }, { status: 400 });
 
-    // Generate quotation number (QUO-0001; BK Wiring website quotes use BKQ-0001)
-    const qPrefix = businessId === BUSINESS_IDS.WEBSITE ? "BKQ" : "QUO";
+    // Generate quotation number (QUO-0001; BK Wiring website quotes use BKQ-0001, Champika online CWQ-0001)
+    const qPrefix =
+      businessId === BUSINESS_IDS.WEBSITE ? "BKQ" : businessId === BUSINESS_IDS.CHAMPIKA_WEBSITE ? "CWQ" : "QUO";
     const [createdRes, noRes] = await Promise.all([
       supabaseAdmin
         .from("quotations")

@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError } from "@/lib/web-utils";
 import { brandSlug } from "@/lib/web-brands";
+import { withSite } from "@/lib/web-site";
 import { refreshShop } from "@/lib/shop-cache";
 
 const schema = z.object({
@@ -21,10 +22,11 @@ const schema = z.object({
 export async function GET() {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const [{ data, error }, { data: prods }] = await Promise.all([
-      supabaseAdmin.from("web_brands").select("*").order("sort_order").order("name"),
-      supabaseAdmin.from("web_products").select("web_brand_id, web_sub_brand_id"),
+      supabaseAdmin.from("web_brands").select("*").eq("site", site).order("sort_order").order("name"),
+      supabaseAdmin.from("web_products").select("web_brand_id, web_sub_brand_id").eq("site", site),
     ]);
     if (error) throw error;
     const countMap: Record<string, number> = {};
@@ -54,12 +56,13 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const v = schema.parse(await request.json());
     if (v.id && v.parentId === v.id) throw new Error("A brand cannot be its own sub brand");
     let parentSlug: string | null = null;
     if (v.parentId) {
-      const { data: p } = await supabaseAdmin.from("web_brands").select("slug, parent_id").eq("id", v.parentId).single();
+      const { data: p } = await supabaseAdmin.from("web_brands").select("slug, parent_id").eq("site", site).eq("id", v.parentId).single();
       if (!p) throw new Error("Parent brand not found");
       if (p.parent_id) throw new Error("Sub brands can only be one level deep");
       parentSlug = p.slug;
@@ -76,8 +79,8 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await (v.id
-      ? supabaseAdmin.from("web_brands").update(row).eq("id", v.id)
-      : supabaseAdmin.from("web_brands").insert(row)
+      ? supabaseAdmin.from("web_brands").update(row).eq("site", site).eq("id", v.id)
+      : supabaseAdmin.from("web_brands").insert(withSite(row, site))
     )
       .select()
       .single();
@@ -86,7 +89,7 @@ export async function POST(request: NextRequest) {
       throw error;
     }
     // Keep the brand text shown on product pages in step with the brand name.
-    if (v.id && !v.parentId) await supabaseAdmin.from("web_products").update({ brand_text: v.name }).eq("web_brand_id", v.id);
+    if (v.id && !v.parentId) await supabaseAdmin.from("web_products").update({ brand_text: v.name }).eq("site", site).eq("web_brand_id", v.id);
     refreshShop();
     return NextResponse.json(
       { id: data.id, name: data.name, slug: data.slug, parentId: data.parent_id },
@@ -100,11 +103,12 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   const id = request.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
   try {
     // Sub brands are removed with their brand (ON DELETE CASCADE); products keep existing.
-    const { error } = await supabaseAdmin.from("web_brands").delete().eq("id", id);
+    const { error } = await supabaseAdmin.from("web_brands").delete().eq("site", site).eq("id", id);
     if (error) throw error;
     refreshShop();
     return NextResponse.json({ success: true });

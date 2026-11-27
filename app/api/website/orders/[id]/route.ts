@@ -24,13 +24,14 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   const { id } = await params;
   try {
     const { data: o, error } = await supabaseAdmin
       .from("web_orders")
       .select(
         "*, web_customers(id, full_name, email, phone, tier, trade_status, created_at), web_order_items(id, web_product_id, product_id, name, qty, unit_price, mrp, line_total, web_products(slug, images), products(sku, cost_price, actual_cost_price))",
-      )
+      ).eq("site", site)
       .eq("id", id)
       .maybeSingle();
     if (error) throw error;
@@ -44,7 +45,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       o.order_id
         ? supabaseAdmin.from("invoices").select("id, invoice_no, total_amount, paid_amount, status").eq("order_id", o.order_id).maybeSingle()
         : Promise.resolve({ data: null }),
-      supabaseAdmin.from("web_orders").select("id", { count: "exact", head: true }).eq("web_customer_id", o.web_customer_id),
+      supabaseAdmin.from("web_orders").select("id", { count: "exact", head: true }).eq("site", site).eq("web_customer_id", o.web_customer_id),
     ]);
 
     // Profit after invoicing comes from the real FIFO cost saved on the invoice lines.
@@ -142,6 +143,7 @@ const actionSchema = z.discriminatedUnion("action", [
 export async function POST(request: NextRequest, { params }: Ctx) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   const { id } = await params;
   const parsed = actionSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "Invalid action" }, { status: 400 });
@@ -164,10 +166,10 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       case "cancel":
         return NextResponse.json(await cancelOrder(id, staff, v.reason));
       case "note": {
-        const { data } = await supabaseAdmin.from("web_orders").select("staff_note").eq("id", id).single();
+        const { data } = await supabaseAdmin.from("web_orders").select("staff_note").eq("site", site).eq("id", id).single();
         const stamp = new Date().toLocaleString("en-LK", { dateStyle: "medium", timeStyle: "short" });
         const line = `[${stamp}] ${staff.name || staff.email || "Staff"}: ${v.text}`;
-        await supabaseAdmin.from("web_orders").update({ staff_note: data?.staff_note ? `${data.staff_note}\n${line}` : line }).eq("id", id);
+        await supabaseAdmin.from("web_orders").update({ staff_note: data?.staff_note ? `${data.staff_note}\n${line}` : line }).eq("site", site).eq("id", id);
         return NextResponse.json({ ok: true });
       }
     }

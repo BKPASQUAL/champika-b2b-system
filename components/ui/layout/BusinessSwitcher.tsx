@@ -54,6 +54,11 @@ const BUSINESS_COLORS: Record<
     badge: "bg-teal-100 text-teal-700",
     text: "text-teal-700",
   },
+  [BUSINESS_IDS.CHAMPIKA_WEBSITE]: {
+    dot: "bg-rose-500",
+    badge: "bg-rose-100 text-rose-700",
+    text: "text-rose-700",
+  },
 };
 
 const DEFAULT_COLOR = {

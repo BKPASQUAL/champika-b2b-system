@@ -6,6 +6,7 @@ import { apiError, getMainWarehouseStock, uniqueSlug } from "@/lib/web-utils";
 import { loadPriceRules, resolveVariantPrice, variantLabel } from "@/lib/web-pricing";
 import { buildSearchKey, searchWords } from "@/lib/web-search";
 import { ensureSuppliers } from "@/lib/web-brands";
+import { withSite } from "@/lib/web-site";
 import { refreshShop } from "@/lib/shop-cache";
 
 const numOrNull = z.preprocess(
@@ -69,6 +70,7 @@ async function loadVariants(webProductIds: string[]) {
 export async function GET(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const sp = request.nextUrl.searchParams;
     const id = sp.get("id");
@@ -79,7 +81,7 @@ export async function GET(request: NextRequest) {
 
     let q = supabaseAdmin.from("web_products").select(
         "*, web_categories!web_products_web_category_id_fkey(name), sub_category:web_categories!web_products_web_sub_category_id_fkey(name), web_product_families(name), brand:web_brands!web_products_web_brand_id_fkey(name), sub_brand:web_brands!web_products_web_sub_brand_id_fkey(name), web_suppliers(name)",
-      ).order("sort_order").order("name");
+      ).eq("site", site).order("sort_order").order("name");
     if (id) q = q.eq("id", id);
     // Every typed word must match the name or the saved search text (tags, brand, specs).
     // Search text ignores dots/spaces, so "1/113" finds "1/1.13mm".
@@ -91,7 +93,7 @@ export async function GET(request: NextRequest) {
     if (status === "published") q = q.eq("is_published", true);
     if (status === "draft") q = q.eq("is_published", false);
 
-    const [{ data: parents, error }, rules] = await Promise.all([q, loadPriceRules()]);
+    const [{ data: parents, error }, rules] = await Promise.all([q, loadPriceRules(site)]);
     if (error) throw error;
 
     const ids = (parents || []).map((p: any) => p.id);
@@ -214,6 +216,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const v = productSchema.parse(await request.json());
     const now = new Date().toISOString();
@@ -247,7 +250,7 @@ export async function POST(request: NextRequest) {
     // Simplified text for search: name, tags, brand, sub brand and spec values.
     const brandIds = [v.webBrandId, v.webSubBrandId].filter(Boolean) as string[];
     const { data: brandRows } = brandIds.length
-      ? await supabaseAdmin.from("web_brands").select("name").in("id", brandIds)
+      ? await supabaseAdmin.from("web_brands").select("name").eq("site", site).in("id", brandIds)
       : { data: [] as { name: string }[] };
     const searchText = buildSearchKey([
       v.name,
@@ -259,8 +262,8 @@ export async function POST(request: NextRequest) {
 
     const write = (r: Record<string, unknown>) =>
       (v.id
-        ? supabaseAdmin.from("web_products").update(r).eq("id", v.id)
-        : supabaseAdmin.from("web_products").insert(r)
+        ? supabaseAdmin.from("web_products").update(r).eq("site", site).eq("id", v.id)
+        : supabaseAdmin.from("web_products").insert(withSite(r, site))
       )
         .select()
         .single();
@@ -317,6 +320,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const v = z
       .object({
@@ -330,12 +334,20 @@ export async function PATCH(request: NextRequest) {
       .parse(await request.json());
 
     if (v.isAvailable !== undefined) {
-      let q = supabaseAdmin.from("web_product_variants").update({ is_available: v.isAvailable, updated_at: new Date().toISOString() });
-      if (v.variantIds?.length) q = q.in("id", v.variantIds);
-      else if (v.ids?.length) q = q.in("web_product_id", v.ids);
-      else throw new Error("Nothing selected");
-      const { error } = await q;
-      if (error) throw error;
+      if (!v.variantIds?.length && !v.ids?.length) throw new Error("Nothing selected");
+      // Only this shop's items.
+      let own = supabaseAdmin.from("web_product_variants").select("id, web_products!inner(site)").eq("web_products.site", site);
+      own = v.variantIds?.length ? own.in("id", v.variantIds) : own.in("web_product_id", v.ids!);
+      const { data: ownRows, error: ownErr } = await own;
+      if (ownErr) throw ownErr;
+      const ownIds = (ownRows || []).map((r: any) => r.id as string);
+      if (ownIds.length) {
+        const { error } = await supabaseAdmin
+          .from("web_product_variants")
+          .update({ is_available: v.isAvailable, updated_at: new Date().toISOString() })
+          .in("id", ownIds);
+        if (error) throw error;
+      }
     }
 
     const patch: Record<string, any> = {};
@@ -346,7 +358,7 @@ export async function PATCH(request: NextRequest) {
       if (!v.ids?.length) throw new Error("Nothing selected");
       const { error } = await supabaseAdmin
         .from("web_products")
-        .update({ ...patch, updated_at: new Date().toISOString() })
+        .update({ ...patch, updated_at: new Date().toISOString() }).eq("site", site)
         .in("id", v.ids);
       if (error) throw error;
     }
@@ -360,6 +372,7 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   const id = request.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
   try {
@@ -373,7 +386,7 @@ export async function DELETE(request: NextRequest) {
         { status: 409 },
       );
     }
-    const { error } = await supabaseAdmin.from("web_products").delete().eq("id", id);
+    const { error } = await supabaseAdmin.from("web_products").delete().eq("site", site).eq("id", id);
     if (error) throw error;
     refreshShop();
     return NextResponse.json({ success: true });

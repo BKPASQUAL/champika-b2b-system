@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { webApi, rs } from "../_components/api";
 import { QUOTE_TONE } from "./tone";
+import { useWebPortal } from "@/app/dashboard/office/website/_site";
 
 type Row = {
   id: string;
@@ -32,6 +33,7 @@ const TABS = [
 ];
 
 export default function WebsiteQuotationsPage() {
+  const portalHome = useWebPortal().base;
   const [tab, setTab] = useState("open");
   const [rows, setRows] = useState<Row[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -94,7 +96,7 @@ export default function WebsiteQuotationsPage() {
                 {rows.map((r) => (
                   <tr key={r.id} className="hover:bg-muted/40">
                     <td className="px-4 py-3">
-                      <Link href={`/dashboard/office/website/quotations/${r.id}`} className="font-semibold text-teal-700 hover:underline">
+                      <Link href={`${portalHome}/quotations/${r.id}`} className="font-semibold text-teal-700 hover:underline">
                         {r.no}
                       </Link>
                       <div className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString("en-LK", { dateStyle: "medium", timeStyle: "short" })}</div>

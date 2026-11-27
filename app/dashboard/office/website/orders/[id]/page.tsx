@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { webApi, rs } from "../../_components/api";
 import { OrderStatusBadge, PaymentBadge } from "../badges";
 import { AdvanceCard, type Advance } from "./AdvanceCard";
+import { useWebPortal } from "@/app/dashboard/office/website/_site";
 
 type Detail = {
   id: string;
@@ -55,6 +56,7 @@ type Detail = {
 const STEP_LABEL: Record<string, string> = { Packed: "Mark packed", Dispatched: "Mark on the way", Delivered: "Mark delivered" };
 
 export default function WebsiteOrderPage() {
+  const portalHome = useWebPortal().base;
   const { id } = useParams<{ id: string }>();
   const [o, setO] = useState<Detail | null>(null);
   const [busy, setBusy] = useState<string>("");
@@ -94,7 +96,7 @@ export default function WebsiteOrderPage() {
 
   return (
     <div className="space-y-5 pb-16">
-      <Link href="/dashboard/office/website/orders" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link href={`${portalHome}/orders`} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Website orders
       </Link>
 

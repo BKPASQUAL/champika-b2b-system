@@ -10,6 +10,7 @@ export const BUSINESS_IDS = {
   WIREMAN_AGENCY: "094b649e-be59-4e2b-b709-7e36ad1ef280",
   SIERRA_AGENCY: "41b55e39-2edb-43ac-9877-dabd23902335",
   WEBSITE: "e7825b22-fa7a-4a82-bbe9-f0ad89386e2f", // BK Wiring online shop
+  CHAMPIKA_WEBSITE: "f1031e63-4cef-4118-b5a7-075db180d9e2", // Champika Hardware online wholesale shop
 } as const;
 
 export const BUSINESS_NAMES = {
@@ -19,6 +20,7 @@ export const BUSINESS_NAMES = {
   [BUSINESS_IDS.WIREMAN_AGENCY]: "Wireman Agency",
   [BUSINESS_IDS.SIERRA_AGENCY]: "Sierra Agency",
   [BUSINESS_IDS.WEBSITE]: "BK Wiring Website",
+  [BUSINESS_IDS.CHAMPIKA_WEBSITE]: "Champika Website",
 } as const;
 
 // ✅ ADDED: Internal Customer Names for Pinning
@@ -26,6 +28,7 @@ export const INTERNAL_CUSTOMERS = [
   "Champika Hardware - Retail",
   "Champika Hardware - Distribution",
   "Champika Hardware - Website",
+  "Champika Hardware - Online",
 ];
 
 export const BUSINESS_ROUTES = {
@@ -35,6 +38,7 @@ export const BUSINESS_ROUTES = {
   [BUSINESS_IDS.WIREMAN_AGENCY]: "/dashboard/office/wireman",
   [BUSINESS_IDS.SIERRA_AGENCY]: "/dashboard/office/sierra",
   [BUSINESS_IDS.WEBSITE]: "/dashboard/office/website",
+  [BUSINESS_IDS.CHAMPIKA_WEBSITE]: "/dashboard/office/champika-website",
 } as const;
 
 export const BUSINESS_PO_PREFIXES: Record<string, string> = {
@@ -44,6 +48,7 @@ export const BUSINESS_PO_PREFIXES: Record<string, string> = {
   [BUSINESS_IDS.WIREMAN_AGENCY]: "W",
   [BUSINESS_IDS.SIERRA_AGENCY]: "S",
   [BUSINESS_IDS.WEBSITE]: "WB",
+  [BUSINESS_IDS.CHAMPIKA_WEBSITE]: "CW",
 };
 
 export const BUSINESS_THEMES = {
@@ -83,10 +88,39 @@ export const BUSINESS_THEMES = {
     textClass: "text-teal-600",
     borderClass: "border-teal-600",
   },
+  [BUSINESS_IDS.CHAMPIKA_WEBSITE]: {
+    primary: "rose",
+    bgClass: "bg-rose-100",
+    textClass: "text-rose-600",
+    borderClass: "border-rose-600",
+  },
 } as const;
 
-/** Hostnames that serve the public online shop (rewritten to /shop). */
-export const SHOP_HOSTS = ["bkwiringbadukade.lk", "www.bkwiringbadukade.lk"];
+/** The two online shops run on one system. Every web_* row carries its site. */
+export type WebSite = "bk" | "champika";
+export const WEB_SITES: WebSite[] = ["bk", "champika"];
+
+/** Hostnames that serve each public online shop (rewritten to /shop). */
+export const SHOP_HOST_SITES: Record<string, WebSite> = {
+  "bkwiringbadukade.lk": "bk",
+  "www.bkwiringbadukade.lk": "bk",
+  // Champika domain: add it here when known, e.g. "champikahardware.lk": "champika".
+};
+
+/** Hostnames that serve any public online shop. */
+export const SHOP_HOSTS = Object.keys(SHOP_HOST_SITES);
+
+/** Which business owns each shop's orders and invoices. */
+export const WEB_SITE_BUSINESS: Record<WebSite, string> = {
+  bk: BUSINESS_IDS.WEBSITE,
+  champika: BUSINESS_IDS.CHAMPIKA_WEBSITE,
+};
+
+/** Staff portal path for each shop. */
+export const WEB_SITE_PORTAL: Record<WebSite, string> = {
+  bk: "/dashboard/office/website",
+  champika: "/dashboard/office/champika-website",
+};
 
 /**
  * Agency reps (Orange / Sierra) only see their own agency's products.

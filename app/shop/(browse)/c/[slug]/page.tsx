@@ -1,17 +1,22 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getCategoryBySlug, getProducts, getShopBase } from "@/lib/shop-data";
+import { getCategoryBySlug, getProducts, getShopBase, getShopSite } from "@/lib/shop-data";
+import { siteProfile } from "../../../_components/site-profile";
 import { Listing, type ListingParams } from "../../../_components/Listing";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<ListingParams> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const found = await getCategoryBySlug((await params).slug);
+  const [found, site] = await Promise.all([getCategoryBySlug((await params).slug), getShopSite()]);
   if (!found) return { title: "Category not found" };
   const c = found.category;
+  const fallback =
+    site === "champika"
+      ? `${c.name} at wholesale prices — genuine brands, carton rates and delivery ${siteProfile(site).deliveryWhere}.`
+      : `Buy ${c.name} online — genuine brands, discount prices and fast delivery in the Galle area.`;
   return {
     title: c.name,
-    description: c.description || `Buy ${c.name} online — genuine brands, discount prices and fast delivery in the Galle area.`,
+    description: c.description || fallback,
     alternates: { canonical: `/c/${c.slug}` },
     openGraph: c.imageUrl ? { images: [c.imageUrl] } : undefined,
   };

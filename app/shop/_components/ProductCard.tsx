@@ -36,7 +36,7 @@ export function ProductCard({ p, base }: { p: ShopProductCard; base: string }) {
           </div>
         )}
         {off && (
-          <span className="absolute left-2.5 top-2.5 rounded-md bg-rose-600 px-1.5 py-0.5 text-[12.5px] font-bold leading-none text-white shadow-sm">
+          <span className="bk-only absolute left-2.5 top-2.5 rounded-md bg-rose-600 px-1.5 py-0.5 text-[12.5px] font-bold leading-none text-white shadow-sm">
             -{p.discountPct}%
           </span>
         )}
@@ -61,8 +61,13 @@ export function ProductCard({ p, base }: { p: ShopProductCard; base: string }) {
         <div className="mt-3">
           {p.price ? (
             <div className="flex flex-wrap items-baseline gap-x-2">
+              {/* Champika (wholesale): "Wholesale Rs y" with the MRP shown for reference, not crossed out. */}
+              <span className="ch-only w-full text-[11px] font-extrabold uppercase tracking-wider text-(--s-accent-text)">
+                <Tr k="Wholesale" />
+              </span>
               <span className="text-[17px] font-bold tracking-tight text-(--s-ink)">{rs(p.price)}</span>
-              {off && <span className="text-xs text-(--s-muted) line-through">{rs(p.mrp)}</span>}
+              {off && <span className="bk-only text-xs text-(--s-muted) line-through">{rs(p.mrp)}</span>}
+              {p.mrp > 0 && <span className="ch-only text-xs text-(--s-muted)">MRP {rs(p.mrp)}</span>}
             </div>
           ) : (
             <span className="text-sm font-medium text-(--s-muted)"><Tr k="Ask for price" /></span>

@@ -6,7 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { LogOut, Settings, Store, Warehouse, Globe, Zap, Mountain, ChevronDown, Check, LayoutDashboard, ShoppingBag } from "lucide-react";
-import { websiteNavItems } from "@/app/config/website-nav-config";
+import { websiteNavItemsFor } from "@/app/config/website-nav-config";
+import type { WebSite } from "@/app/config/business-constants";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
 import { distributionNavItems } from "@/app/config/distribution-nav-config";
@@ -46,6 +47,8 @@ interface AppSidebarProps {
   isWireman?: boolean;
   isSierra?: boolean;
   isWebsite?: boolean;
+  /** Which online shop the website portal is for (default BK Wiring). */
+  webSite?: WebSite;
 }
 
 export function AppSidebar({
@@ -56,14 +59,16 @@ export function AppSidebar({
   isWireman = false,
   isSierra = false,
   isWebsite = false,
+  webSite = "bk",
 }: AppSidebarProps) {
+  const isChampikaWeb = isWebsite && webSite === "champika";
   const pathname = usePathname();
   const router = useRouter();
 
   // --- NAVIGATION SELECTION LOGIC ---
   let navSections;
   if (isWebsite) {
-    navSections = websiteNavItems;
+    navSections = websiteNavItemsFor(webSite);
   } else if (isWireman) {
     navSections = wiremanOfficeNavItems;
   } else if (isSierra) {
@@ -123,7 +128,9 @@ export function AppSidebar({
     : isSierra
     ? BUSINESS_IDS.SIERRA_AGENCY
     : isWebsite
-    ? BUSINESS_IDS.WEBSITE
+    ? isChampikaWeb
+      ? BUSINESS_IDS.CHAMPIKA_WEBSITE
+      : BUSINESS_IDS.WEBSITE
     : null;
 
   const isOfficePortal = isOrange || isRetail || isDistribution || isWireman || isSierra || isWebsite;
@@ -192,7 +199,7 @@ export function AppSidebar({
                 {/* Name */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate leading-tight">
-                    {isWebsite ? "BK Wiring Website" :
+                    {isWebsite ? (isChampikaWeb ? "Champika Website" : "BK Wiring Website") :
                      isWireman ? "Wireman Agency" :
                      isSierra ? "Sierra Agency" :
                      isOrange ? "Orange Agency" :
@@ -240,6 +247,7 @@ export function AppSidebar({
                   id === BUSINESS_IDS.WIREMAN_AGENCY ? "bg-red-500" :
                   id === BUSINESS_IDS.SIERRA_AGENCY ? "bg-purple-500" :
                   id === BUSINESS_IDS.WEBSITE ? "bg-teal-500" :
+                  id === BUSINESS_IDS.CHAMPIKA_WEBSITE ? "bg-rose-500" :
                   "bg-gray-400";
 
                 return (

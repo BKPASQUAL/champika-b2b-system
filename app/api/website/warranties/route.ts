@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireWebsiteStaff } from "@/lib/web-auth";
+import { withSite, type WebSite } from "@/lib/web-site";
 import { apiError } from "@/lib/web-utils";
 
 /**
@@ -22,8 +23,8 @@ const listSchema = z.object({ presets: z.array(presetSchema).max(200) });
 
 export type WarrantyPreset = z.infer<typeof presetSchema>;
 
-async function readPresets(): Promise<WarrantyPreset[]> {
-  const { data, error } = await supabaseAdmin.from("web_settings").select("value").eq("key", "warranties").maybeSingle();
+async function readPresets(site: WebSite): Promise<WarrantyPreset[]> {
+  const { data, error } = await supabaseAdmin.from("web_settings").select("value").eq("site", site).eq("key", "warranties").maybeSingle();
   if (error) throw error;
   const raw = Array.isArray(data?.value) ? (data!.value as unknown[]) : [];
   return raw.map((p) => presetSchema.safeParse(p)).filter((r) => r.success).map((r) => r.data!);
@@ -32,12 +33,13 @@ async function readPresets(): Promise<WarrantyPreset[]> {
 export async function GET() {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
-    const presets = await readPresets();
+    const presets = await readPresets(site);
     // How many products use each warranty (same period + terms).
     const { data: rows } = await supabaseAdmin
       .from("web_products")
-      .select("warranty_period, warranty_terms")
+      .select("warranty_period, warranty_terms").eq("site", site)
       .not("warranty_period", "is", null);
     const key = (period: string, terms: string | null) => `${period.trim().toLowerCase()}\u0000${(terms || "").trim()}`;
     const counts = new Map<string, number>();
@@ -57,13 +59,14 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const { presets } = listSchema.parse(await request.json());
-    const before = await readPresets();
+    const before = await readPresets(site);
 
     const { error } = await supabaseAdmin
       .from("web_settings")
-      .upsert({ key: "warranties", value: presets, updated_at: new Date().toISOString() });
+      .upsert(withSite({ key: "warranties", value: presets, updated_at: new Date().toISOString() }, site));
     if (error) throw error;
 
     let productsUpdated = 0;
@@ -72,7 +75,7 @@ export async function POST(request: NextRequest) {
       if (!old || (old.period === next.period && old.terms === next.terms)) continue;
       let q = supabaseAdmin
         .from("web_products")
-        .update({ warranty_period: next.period, warranty_terms: next.terms || null })
+        .update({ warranty_period: next.period, warranty_terms: next.terms || null }).eq("site", site)
         .eq("warranty_period", old.period);
       q = old.terms ? q.eq("warranty_terms", old.terms) : q.is("warranty_terms", null);
       const { data, error: upErr } = await q.select("id");

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { webApi, rs } from "../_components/api";
 import { OrderStatusBadge, PaymentBadge } from "./badges";
+import { useWebPortal } from "@/app/dashboard/office/website/_site";
 
 type Row = {
   id: string;
@@ -37,6 +38,7 @@ const TABS = [
 ];
 
 export default function WebsiteOrdersPage() {
+  const portalHome = useWebPortal().base;
   const [tab, setTab] = useState("open");
   const [slipsOnly, setSlipsOnly] = useState(false);
   const [q, setQ] = useState("");
@@ -136,7 +138,7 @@ export default function WebsiteOrdersPage() {
                 {rows.map((r) => (
                   <tr key={r.id} className="hover:bg-muted/40">
                     <td className="px-4 py-3">
-                      <Link href={`/dashboard/office/website/orders/${r.id}`} className="font-semibold text-teal-700 hover:underline">
+                      <Link href={`${portalHome}/orders/${r.id}`} className="font-semibold text-teal-700 hover:underline">
                         {r.no}
                       </Link>
                       <div className="text-xs text-muted-foreground">

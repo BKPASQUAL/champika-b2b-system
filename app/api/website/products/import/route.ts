@@ -5,6 +5,7 @@ import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError, getAllowedMainCategories, uniqueSlug } from "@/lib/web-utils";
 import { detectBrand, normaliseBrand } from "@/lib/web-brand-detect";
 import { ensureBrands, ensureSuppliers } from "@/lib/web-brands";
+import { withSite } from "@/lib/web-site";
 import { refreshShop } from "@/lib/shop-cache";
 
 /**
@@ -15,6 +16,7 @@ import { refreshShop } from "@/lib/shop-cache";
 export async function POST(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const v = z
       .object({
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
       const brand = brandOf.get(p.id) ?? null;
       const { data, error: e } = await supabaseAdmin
         .from("web_products")
-        .insert({
+        .insert(withSite({
           name: p.name,
           slug: await uniqueSlug("web_products", p.name),
           brand_text: brand,
@@ -71,7 +73,7 @@ export async function POST(request: NextRequest) {
           images: p.images || [],
           web_category_id: v.webCategoryId ?? null,
           is_published: v.publish,
-        })
+        }, site))
         .select("id")
         .single();
       if (e) throw e;

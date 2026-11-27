@@ -102,7 +102,7 @@ export function QuickOrder({
   brands?: QuickOrderBrand[];
   items?: QuickOrderItem[];
 }) {
-  const { cart, ready, add, setQty, remove, clear, replaceMany, href } = useShop();
+  const { cart, ready, add, setQty, remove, clear, replaceMany, href, profile } = useShop();
   const input = useRef<HTMLInputElement>(null);
 
   const [q, setQ] = useState("");
@@ -249,7 +249,7 @@ export function QuickOrder({
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-xl font-extrabold tracking-tight text-(--s-ink) md:text-2xl">Quick order</h1>
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[12.5px] font-bold text-emerald-600 dark:text-emerald-400">
-              <MapPin className="h-3 w-3" /> Galle area delivery
+              <MapPin className="h-3 w-3" /> {profile.deliveryBadge}
             </span>
           </div>
           <ol className="mt-2.5 hidden flex-wrap sm:flex gap-2 text-xs font-medium text-(--s-ink-2)">
@@ -919,7 +919,7 @@ export function QuickOrder({
                 <span className="text-2xl font-extrabold tracking-tight text-(--s-ink)">{rs(list?.subtotal || 0)}</span>
               </div>
               {!!list?.deliveryFee && (
-                <p className="-mt-2 text-right text-xs font-medium text-(--s-muted)">+ Galle area delivery {rs(list.deliveryFee)}</p>
+                <p className="-mt-2 text-right text-xs font-medium text-(--s-muted)">+ {profile.deliveryBadge} {rs(list.deliveryFee)}</p>
               )}
               <Link
                 href={href("/checkout")}

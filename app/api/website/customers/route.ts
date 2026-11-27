@@ -8,19 +8,20 @@ import { apiError } from "@/lib/web-utils";
 export async function GET(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const sp = request.nextUrl.searchParams;
     const q = (sp.get("q") || "").trim().replace(/[%,()]/g, " ");
     let query = supabaseAdmin
       .from("web_customers")
-      .select("id, full_name, email, phone, tier, trade_status, business_name, nic_or_reg_no, is_blocked, auth_provider, created_at, default_address")
+      .select("id, full_name, email, phone, tier, trade_status, business_name, nic_or_reg_no, is_blocked, auth_provider, created_at, default_address").eq("site", site)
       .order("created_at", { ascending: false })
       .limit(500);
     if (q) query = query.or(`full_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`);
     if (sp.get("trade") === "pending") query = query.eq("trade_status", "pending");
     const [{ data, error }, { data: orders }] = await Promise.all([
       query,
-      supabaseAdmin.from("web_orders").select("web_customer_id, total, status"),
+      supabaseAdmin.from("web_orders").select("web_customer_id, total, status").eq("site", site),
     ]);
     if (error) throw error;
     const stats: Record<string, { count: number; spent: number }> = {};
@@ -62,6 +63,7 @@ const patchSchema = z.object({
 export async function PATCH(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   const parsed = patchSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   const { id, action } = parsed.data;
@@ -73,7 +75,7 @@ export async function PATCH(request: NextRequest) {
         : action === "make_normal"
           ? { tier: "normal", trade_status: "none" }
           : { is_blocked: action === "block" };
-  const { error } = await supabaseAdmin.from("web_customers").update({ ...update, updated_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabaseAdmin.from("web_customers").update({ ...update, updated_at: new Date().toISOString() }).eq("site", site).eq("id", id);
   if (error) return apiError(error);
   return NextResponse.json({ ok: true });
 }

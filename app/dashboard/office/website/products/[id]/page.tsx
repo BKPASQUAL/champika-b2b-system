@@ -23,8 +23,8 @@ import { WarrantyCard } from "../../_components/WarrantyCard";
 import { suggestSizeTags } from "@/lib/web-search";
 import { detectBrand } from "@/lib/web-brand-detect";
 import { suggestSpecs } from "@/lib/web-specs";
+import { useWebPortal } from "@/app/dashboard/office/website/_site";
 
-const LIST = "/dashboard/office/website/products";
 
 type Draft = {
   id?: string;
@@ -68,6 +68,7 @@ const emptyDraft: Draft = {
 };
 
 export default function WebsiteProductEditor() {
+  const portalHome = useWebPortal().base;
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const isNew = params.id === "new";
@@ -246,7 +247,7 @@ export default function WebsiteProductEditor() {
       };
       const r = await webApi<{ id: string }>("/api/website/products", { method: "POST", json: body });
       toast.success("Product saved");
-      if (isNew) router.replace(`${LIST}/${r.id}`);
+      if (isNew) router.replace(`${portalHome}/products/${r.id}`);
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -273,7 +274,7 @@ export default function WebsiteProductEditor() {
   return (
     <div className="space-y-6 pb-24">
       <div className="flex flex-wrap items-center gap-3">
-        <Link href={LIST}><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
+        <Link href={`${portalHome}/products`}><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div className="flex-1 min-w-0">
           <h2 className="text-2xl font-bold tracking-tight truncate">{isNew ? "New Website Product" : d.name}</h2>
           {normal && (

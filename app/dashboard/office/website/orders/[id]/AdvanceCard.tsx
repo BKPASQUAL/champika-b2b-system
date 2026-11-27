@@ -5,7 +5,8 @@ import { CheckCircle2, ExternalLink, FileText, Loader2, PackageSearch, Wallet } 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { SHOP_URL } from "@/lib/shop-host";
+import { SITE_URLS } from "@/lib/shop-host";
+import { useWebPortal } from "@/app/dashboard/office/website/_site";
 import { whatsappLink } from "@/app/shop/_components/format";
 import { rs } from "../../_components/api";
 
@@ -41,7 +42,10 @@ export function AdvanceCard({
   const waiting = advance.status === "requested" || advance.status === "slip_uploaded";
   const amt = Number(amount) || 0;
 
-  const orderLink = `${SHOP_URL}/account/orders/${encodeURIComponent(orderNo)}`;
+  // The customer's own shop (its domain, or this system + /champika until Champika's domain is set).
+  const { site, shopPath } = useWebPortal();
+  const shopUrl = SITE_URLS[site] || `${typeof window !== "undefined" ? window.location.origin : ""}${shopPath}`;
+  const orderLink = `${shopUrl}/account/orders/${encodeURIComponent(orderNo)}`;
   const wa = whatsappLink(
     phone,
     advance.amount > 0

@@ -30,7 +30,8 @@ export async function POST(
     const finalPaymentType = paymentType || q.payment_type || "Cash";
 
     // 2. Helper to generate CHR-XXXX (BK Wiring: BKW-XXXX) invoice number safely
-    const prefix = businessId === BUSINESS_IDS.WEBSITE ? "BKW" : "CHR";
+    const prefix =
+      businessId === BUSINESS_IDS.WEBSITE ? "BKW" : businessId === BUSINESS_IDS.CHAMPIKA_WEBSITE ? "CWI" : "CHR";
     const getNextInvoiceNo = async (offset = 0): Promise<string> => {
       const [createdRes, noRes] = await Promise.all([
         supabaseAdmin

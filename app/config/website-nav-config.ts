@@ -20,8 +20,9 @@ import {
   ClipboardList,
   LucideIcon,
 } from "lucide-react";
+import { WEB_SITE_PORTAL, type WebSite } from "@/app/config/business-constants";
 
-const BASE = "/dashboard/office/website";
+
 
 interface WebsiteNavItem {
   name: string;
@@ -36,11 +37,15 @@ interface WebsiteNavSection {
   items: WebsiteNavItem[];
 }
 
-export const websiteNavItems: WebsiteNavSection[] = [
+/** Portal menu for one online shop (BK Wiring or Champika). */
+export function websiteNavItemsFor(site: WebSite): WebsiteNavSection[] {
+  const BASE = WEB_SITE_PORTAL[site];
+  const shopName = site === "champika" ? "Champika" : "BK Wiring";
+  return [
   {
     items: [
       { name: "Website Dashboard", href: BASE, icon: LayoutDashboard },
-      { name: "View Shop", href: "/shop", icon: ExternalLink },
+      { name: "View Shop", href: site === "champika" ? "/champika" : "/shop", icon: ExternalLink },
     ],
   },
   {
@@ -60,8 +65,8 @@ export const websiteNavItems: WebsiteNavSection[] = [
     title: "Sales",
     items: [
       { name: "Website Orders", href: `${BASE}/orders`, icon: ShoppingCart },
-      { name: "BK Wiring Quotations", href: `${BASE}/office-quotations`, icon: FileText },
-      { name: "BK Wiring Invoices", href: `${BASE}/office-invoices`, icon: Receipt },
+      { name: `${shopName} Quotations`, href: `${BASE}/office-quotations`, icon: FileText },
+      { name: `${shopName} Invoices`, href: `${BASE}/office-invoices`, icon: Receipt },
       { name: "Online Quote Requests", href: `${BASE}/quotations`, icon: ClipboardList },
       { name: "Customers", href: `${BASE}/customers`, icon: Users },
     ],
@@ -78,4 +83,7 @@ export const websiteNavItems: WebsiteNavSection[] = [
     title: "Settings",
     items: [{ name: "Shop Settings", href: `${BASE}/settings`, icon: Settings }],
   },
-];
+  ];
+}
+
+export const websiteNavItems = websiteNavItemsFor("bk");

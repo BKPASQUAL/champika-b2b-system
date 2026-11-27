@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getProducts } from "@/lib/shop-data";
 import { nextRunningNo } from "@/lib/web-utils";
+import { getRequestSite, SITE_QUOTE_PREFIX } from "@/lib/web-site";
 import { insertWebOrder, saleRowsFor } from "@/lib/web-order-create";
 import type { PriceTier } from "@/lib/web-pricing";
 import type { ShopAddress } from "@/lib/shop-address";
@@ -85,12 +86,14 @@ export async function createQuote(input: {
   if (input.type === "cart" && !lines.length) throw new QuoteError("Your cart has no items we can quote.");
   const subtotal = lines.reduce((s, l) => s + l.line_total, 0);
 
+  const site = await getRequestSite();
   let quote: { id: string; quote_no: string } | null = null;
   for (let attempt = 0; attempt < 4 && !quote; attempt++) {
-    const no = await nextRunningNo("web_quote_requests", "quote_no", "WQ");
+    const no = await nextRunningNo("web_quote_requests", "quote_no", SITE_QUOTE_PREFIX[site]);
     const { data, error } = await supabaseAdmin
       .from("web_quote_requests")
       .insert({
+        site,
         quote_no: no,
         web_customer_id: input.customerId,
         type: input.type,
@@ -136,6 +139,7 @@ export async function saveQuote(
     .from("web_quote_requests")
     .select("id, status, web_customers(tier, trade_status)")
     .eq("id", quoteId)
+    .eq("site", await getRequestSite())
     .maybeSingle();
   if (!q) throw new QuoteError("Quotation not found", 404);
   if (["Accepted", "Rejected"].includes(q.status)) throw new QuoteError(`This quotation is already ${q.status.toLowerCase()}.`);

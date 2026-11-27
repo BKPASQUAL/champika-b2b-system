@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { createWebCustomerFor } from "@/lib/web-auth";
 import { shopBaseFor } from "@/lib/shop-host";
+import { getRequestSite } from "@/lib/web-site";
 
 /** Only same-site paths like "/checkout" (never "//evil.com" or full URLs). */
 function safeNext(raw: string | null): string {
@@ -15,7 +16,7 @@ function safeNext(raw: string | null): string {
  */
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
-  const base = shopBaseFor(request.headers.get("host"));
+  const base = shopBaseFor(request.headers.get("host"), await getRequestSite());
   const next = safeNext(url.searchParams.get("next"));
   const go = (path: string) => NextResponse.redirect(new URL(`${base}${path}`, url.origin));
 
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
   try {
     if (!(await createWebCustomerFor(data.user))) {
       await supabase.auth.signOut();
-      return go(`/login?error=${encodeURIComponent("This account is blocked. Please contact us.")}`);
+      return go(`/login?error=${encodeURIComponent("This account can't be used to log in here. Please contact us.")}`);
     }
   } catch {
     return go(`/login?error=${encodeURIComponent("Could not set up your account. Please try again.")}`);

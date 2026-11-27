@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { webApi } from "../_components/api";
 import { ImageUploader } from "../_components/ImageUploader";
 import type { WebBrand } from "../_components/types";
+import { useWebPortal } from "@/app/dashboard/office/website/_site";
 
 type Form = { id?: string; name: string; parentId: string | null; logoUrl: string | null; description: string; sortOrder: number; isFeatured: boolean; isActive: boolean };
 const emptyForm: Form = { name: "", parentId: null, logoUrl: null, description: "", sortOrder: 0, isFeatured: true, isActive: true };
@@ -24,6 +25,7 @@ const emptyForm: Form = { name: "", parentId: null, logoUrl: null, description: 
 type Suggestion = { id: string; name: string; mainName: string | null; currentBrand: string | null; suggested: string | null };
 
 export default function WebsiteBrandsPage() {
+  const portalHome = useWebPortal().base;
   const [items, setItems] = useState<WebBrand[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Form | null>(null);
@@ -112,7 +114,7 @@ export default function WebsiteBrandsPage() {
                 <p className="font-semibold truncate flex-1">{b.name}</p>
                 {b.isFeatured && <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />}
               </div>
-              <Link href={`/dashboard/office/website/products?brand=${b.id}`} className="text-xs text-muted-foreground">
+              <Link href={`${portalHome}/products?brand=${b.id}`} className="text-xs text-muted-foreground">
                 {b.productCount} products
               </Link>
               {!b.logoUrl && <Badge variant="secondary" className="ml-2 text-[10px]">no logo</Badge>}

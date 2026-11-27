@@ -8,16 +8,17 @@ import { isExpired } from "@/lib/web-quotes";
 export async function GET(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const status = request.nextUrl.searchParams.get("status") || "open";
     let q = supabaseAdmin
       .from("web_quote_requests")
-      .select("id, quote_no, type, status, house_type, total, valid_until, created_at, web_customers(full_name, phone, tier), web_quote_items(id)")
+      .select("id, quote_no, type, status, house_type, total, valid_until, created_at, web_customers(full_name, phone, tier), web_quote_items(id)").eq("site", site)
       .order("created_at", { ascending: false })
       .limit(300);
     if (status === "open") q = q.in("status", ["Requested", "Priced"]);
     else if (status !== "all") q = q.eq("status", status);
-    const [{ data, error }, { data: all }] = await Promise.all([q, supabaseAdmin.from("web_quote_requests").select("status")]);
+    const [{ data, error }, { data: all }] = await Promise.all([q, supabaseAdmin.from("web_quote_requests").select("status").eq("site", site)]);
     if (error) throw error;
     const counts: Record<string, number> = {};
     for (const r of all || []) counts[r.status] = (counts[r.status] || 0) + 1;

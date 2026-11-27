@@ -6,6 +6,7 @@ import { ArrowLeft, Eye, EyeOff, Loader2, MailCheck, Smartphone } from "lucide-r
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { useShop } from "../_components/ShopContext";
 import { Field, GoogleIcon, Notice, btnDark, btnOutline, cardCls, inputCls } from "../_components/ui";
+import { PhoneLogin } from "./PhoneLogin";
 
 type Mode = "login" | "signup" | "forgot";
 
@@ -23,7 +24,7 @@ function friendly(msg: string): string {
 }
 
 export function LoginForm({ next, initialError, initialMode }: { next: string; initialError: string | null; initialMode: "login" | "signup" }) {
-  const { href, store, t } = useShop();
+  const { href, store, t, site } = useShop();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [name, setName] = useState("");
@@ -155,7 +156,10 @@ export function LoginForm({ next, initialError, initialMode }: { next: string; i
             <h1 className="text-2xl font-bold">{titles[mode].title}</h1>
             <p className="mt-1 text-sm text-(--s-muted)">{titles[mode].sub}</p>
 
-            {mode !== "forgot" && (
+            {/* Champika: phone number + SMS code first (email / Google stay below as a fallback). */}
+            {mode !== "forgot" && site === "champika" && <PhoneLogin onDone={finish} />}
+
+            {mode !== "forgot" && site !== "champika" && (
               <div className="mt-6 rounded-2xl border-2 border-(--s-accent)/30 bg-(--s-accent-soft)/50 p-4">
                 <div className="flex items-start gap-3">
                   <Smartphone className="mt-0.5 h-6 w-6 shrink-0 text-(--s-accent)" />

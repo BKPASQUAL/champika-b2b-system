@@ -6,6 +6,33 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, BadgeCheck, Check, Download, ExternalLink, Eye, FileText, Info, Loader2, Lock, Share2, ShoppingBag, X, ZoomIn } from "lucide-react";
 import { useShop } from "./ShopContext";
+import type { SiteProfile } from "./site-profile";
+
+/**
+ * Shop of the page (set by CompareBrands) for the PDF / share text below:
+ * each shop's quotations carry only its own name, domain, delivery area and logo.
+ */
+let P: SiteProfile = {
+  site: "bk",
+  defaultName: "",
+  domainLabel: "",
+  deliveryWhere: "",
+  deliveryBadge: "",
+  deliveryLine: "",
+  cartNote: ["", "", ""],
+  freeDeliveryWhere: "",
+  pdf: { area: "", title: "", line: "", sentence: "", footer: "" },
+  titleSuffix: "",
+  metaDescription: "",
+  themeColor: "",
+  cartKey: "",
+  themeCookie: "",
+  langCookie: "",
+};
+/** Real BK emblem (drawn) vs a picture logo. */
+const isBk = () => P.site === "bk";
+/** Domain to quote in text, falling back to the shop name when no domain is known yet. */
+const webOr = (name: string) => P.domainLabel || name;
 import { rs } from "./format";
 import { QuoteFromCart } from "./QuoteFromCart";
 
@@ -161,7 +188,11 @@ function defaultPick(sum: Summary) {
  * e.g. Sierra wire with Akoya Black switches.
  */
 export function CompareBrands() {
-  const { cart, ready, href, replaceMany, store, customer } = useShop();
+  const { cart, ready, href, replaceMany, store, customer, profile } = useShop();
+  // The PDF / share helpers below run on button clicks, after this has run.
+  useEffect(() => {
+    P = profile;
+  }, [profile]);
   const [data, setData] = useState<Table | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -300,7 +331,7 @@ export function CompareBrands() {
       const q = await makeQuotationPdf(allRows(view), store, customer?.name || "", data?.brandLogos || []);
       if (!q.count) return toast.error("No items to put in the quotation");
       const file = new File([q.blob], q.fileName, { type: "application/pdf" });
-      const text = `Quotation ${q.ref} from ${store.name || "BK Wiring"}: ${itemsWord(q.count)}, total ${rs(q.total)}. bkwiringbadukade.lk`;
+      const text = `Quotation ${q.ref} from ${store.name || P.defaultName}: ${itemsWord(q.count)}, total ${rs(q.total)}.${P.domainLabel ? ` ${P.domainLabel}` : ""}`;
       if (mode === "share" && typeof navigator !== "undefined" && navigator.canShare?.({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: `Quotation ${q.ref}`, text });
@@ -1860,18 +1891,18 @@ async function makePdf(
   doc.rect(0, 0, W, 30, "F");
   doc.setFillColor(...BLUE);
   doc.rect(0, 30, W, 1.4, "F");
-  const logoDark = await shopLogo(store.name || "BK Wiring", true);
+  const logoDark = await shopLogo(store.name || P.defaultName, true);
   if (logoDark) doc.addImage(logoDark.data, "PNG", M, 14.5 - 12 * logoDark.baseline, 12 * logoDark.ratio, 12, "shop-logo-dark", "FAST");
   else {
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(19);
-    doc.text(store.name || "BK Wiring", M, 14);
+    doc.text(store.name || P.defaultName, M, 14);
   }
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(147, 197, 253);
-  doc.text(["bkwiringbadukade.lk", "Galle area delivery", store.phone ? `Tel: ${store.phone}` : ""].filter(Boolean).join("   |   "), M, 23);
+  doc.text([P.domainLabel, P.deliveryBadge, store.phone ? `Tel: ${store.phone}` : ""].filter(Boolean).join("   |   "), M, 23);
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
@@ -2018,7 +2049,7 @@ async function makePdf(
   const notes = [
     "A brand's total adds only the items that brand has. Check \"Items this brand has\" before comparing totals.",
     "Where a brand has more than one range or colour, the cheapest one is shown (its name is under the price).",
-    "Prices include taxes. Galle area delivery charges are calculated at dispatch.",
+    `Prices include taxes. ${P.pdf.area} delivery charges are calculated at dispatch.`,
   ];
   doc.text(notes, M, y);
 
@@ -2035,7 +2066,7 @@ async function makePdf(
     doc.line(M, H - 12, W - M, H - 12);
     doc.setFontSize(7.5);
     doc.setTextColor(...MUTED);
-    doc.text(`Prices valid on ${today} and may change.  To order: bkwiringbadukade.lk${store.phone ? `  |  ${store.phone}` : ""}`, M, H - 7.5);
+    doc.text(`Prices valid on ${today} and may change.  To order: ${webOr(store.name || P.defaultName)}${store.phone ? `  |  ${store.phone}` : ""}`, M, H - 7.5);
     doc.text(`Page ${p} of ${pages}`, W - M, H - 7.5, { align: "right" });
   }
 
@@ -2092,14 +2123,14 @@ async function makeQuotationPdf(
   doc.rect(0, 4.5, W, 1.3, "F");
 
   // Left: Shop Logo + Company Details
-  const logo = await shopLogo(store.name || "BK Wiring", false);
+  const logo = await shopLogo(store.name || P.defaultName, false);
   if (logo) {
     doc.addImage(logo.data, "PNG", M, 20.5 - 13 * logo.baseline, 13 * logo.ratio, 13, "shop-logo", "FAST");
   } else {
     doc.setTextColor(...INK);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(20);
-    doc.text(store.name || "BK Wiring", M, 20.5);
+    doc.text(store.name || P.defaultName, M, 20.5);
   }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.8);
@@ -2108,7 +2139,7 @@ async function makeQuotationPdf(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.2);
   doc.setTextColor(...MUTED);
-  const contactParts = ["Web: bkwiringbadukade.lk", "Delivery: Galle Area"];
+  const contactParts = [P.domainLabel ? `Web: ${P.domainLabel}` : "", `Delivery: ${P.pdf.area}`].filter(Boolean);
   if (store.phone) contactParts.push(`Tel: ${store.phone}`);
   if (store.whatsapp && store.whatsapp !== store.phone) contactParts.push(`WhatsApp: ${store.whatsapp}`);
   doc.text(contactParts.join("   |   "), M, 32);
@@ -2181,11 +2212,11 @@ async function makeQuotationPdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.2);
   doc.setTextColor(...INK);
-  doc.text("Galle Area Doorstep Delivery", c2x, y + 9.8);
+  doc.text(P.pdf.title, c2x, y + 9.8);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.8);
   doc.setTextColor(...MUTED);
-  doc.text("Fast dispatch across Galle & suburbs", c2x, y + 14.2);
+  doc.text(P.pdf.line, c2x, y + 14.2);
 
   // Col 3: Payment & Warranty
   const c3x = M + col1W + col2W + 4;
@@ -2346,7 +2377,7 @@ async function makeQuotationPdf(
           { label: `Discount Saved${savingPct > 0 ? ` (${savingPct}% OFF)` : ""}`, value: `- ${rs(saving)}`, isDiscount: true },
         ]
       : [{ label: "Items Subtotal", value: rs(total) }];
-  rowsT.push({ label: "Delivery (Galle Area)", value: "Not included" });
+  rowsT.push({ label: `Delivery (${P.pdf.area})`, value: "Not included" });
 
   let ry = y + 4;
   rowsT.forEach((row) => {
@@ -2390,8 +2421,10 @@ async function makeQuotationPdf(
   const notes = doc.splitTextToSize(
     [
       `1. Prices include applicable taxes and are valid for 7 days from ${dateText} (subject to stock).`,
-      "2. Doorstep delivery is available across the Galle area (delivery charges calculated at dispatch).",
-      `3. To place this order, visit bkwiringbadukade.lk${store.phone ? ` or call/WhatsApp ${store.phone}` : ""} and quote Ref ${ref}.`,
+      `2. ${P.pdf.sentence} (delivery charges calculated at dispatch).`,
+      P.domainLabel
+        ? `3. To place this order, visit ${P.domainLabel}${store.phone ? ` or call/WhatsApp ${store.phone}` : ""} and quote Ref ${ref}.`
+        : `3. To place this order${store.phone ? `, call/WhatsApp ${store.phone}` : ", contact us"} and quote Ref ${ref}.`,
     ].join("\n"),
     notesW,
   );
@@ -2413,7 +2446,7 @@ async function makeQuotationPdf(
     doc.setFontSize(7.5);
     doc.setTextColor(...MUTED);
     doc.text(
-      `${store.name || "BK Wiring"}  •  bkwiringbadukade.lk  •  Galle Area Delivery${store.phone ? `  •  ${store.phone}` : ""}`,
+      [store.name || P.defaultName, P.domainLabel, P.pdf.footer, store.phone].filter(Boolean).join("  •  "),
       M,
       H - 7.5,
     );
@@ -2470,6 +2503,8 @@ async function ensureSinhalaFontLoaded() {
  *   stroke contrast, and a graceful decorative swash flourish underneath.
  */
 async function shopLogo(name: string, onDark: boolean) {
+  // Champika: the real CH logo (public/ch-logo.png) instead of the drawn BK emblem.
+  if (!isBk()) return imageLogo("/ch-logo.png");
   await ensureSinhalaFontLoaded();
 
   const scale = 4;
@@ -2636,6 +2671,26 @@ async function shopLogo(name: string, onDark: boolean) {
   ctx.restore();
 
   return { data: c.toDataURL("image/png"), ratio: W / H, baseline: baselineY / H };
+}
+
+/** A logo picture from /public as a PNG data URL, in the same shape shopLogo returns. */
+async function imageLogo(src: string): Promise<{ data: string; ratio: number; baseline: number } | null> {
+  try {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    ctx.fillStyle = "#ffffff"; // the logo sits on a white chip, also on the dark header band
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0);
+    return { data: c.toDataURL("image/png"), ratio: c.width / c.height, baseline: 0.75 };
+  } catch {
+    return null;
+  }
 }
 
 type BrandCardImage = { name: string; dataUrl: string; aspect: number };

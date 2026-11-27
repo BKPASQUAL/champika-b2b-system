@@ -11,13 +11,14 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   const { id } = await params;
   try {
     const { data: q, error } = await supabaseAdmin
       .from("web_quote_requests")
       .select(
         "*, web_customers(id, full_name, email, phone, tier, trade_status), web_orders(id, web_order_no), web_quote_items(id, web_product_id, product_id, name, qty, mrp, auto_price, final_price, line_total, web_products(images), products(cost_price, actual_cost_price))",
-      )
+      ).eq("site", site)
       .eq("id", id)
       .maybeSingle();
     if (error) throw error;

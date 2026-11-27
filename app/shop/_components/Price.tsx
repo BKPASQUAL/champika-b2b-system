@@ -17,12 +17,14 @@ export function Price({
   const lg = size === "lg";
   return (
     <div className={`flex flex-wrap items-baseline gap-x-2.5 gap-y-1 ${lg ? "justify-start" : "justify-center"}`}>
+      {lg && <span className="ch-only w-full text-xs font-extrabold uppercase tracking-wider text-(--s-accent-text)">Wholesale price</span>}
       <span className={`${lg ? "text-2xl md:text-3xl" : "text-[16px]"} font-extrabold tracking-tight text-(--s-ink)`}>{rs(price)}</span>
+      {mrp > 0 && <span className={`ch-only ${lg ? "text-base" : "text-xs"} font-medium text-(--s-muted)`}>MRP {rs(mrp)}</span>}
       {off && (
         <>
-          <span className={`${lg ? "text-base" : "text-xs"} font-medium text-(--s-muted) line-through decoration-(--s-muted)/70`}>{rs(mrp)}</span>
+          <span className={`bk-only ${lg ? "text-base" : "text-xs"} font-medium text-(--s-muted) line-through decoration-(--s-muted)/70`}>{rs(mrp)}</span>
           {lg && (
-            <span className="rounded-full bg-rose-500/10 px-2.5 py-0.5 text-xs font-extrabold text-rose-600 ring-1 ring-inset ring-rose-500/20 dark:text-rose-400">
+            <span className="bk-only rounded-full bg-rose-500/10 px-2.5 py-0.5 text-xs font-extrabold text-rose-600 ring-1 ring-inset ring-rose-500/20 dark:text-rose-400">
               {discountPct}% OFF
             </span>
           )}

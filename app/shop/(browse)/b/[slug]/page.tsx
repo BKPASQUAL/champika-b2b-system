@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getBrands, getProducts, getShopBase } from "@/lib/shop-data";
+import { getBrands, getProducts, getShopBase, getShopSite } from "@/lib/shop-data";
+import { siteProfile } from "../../../_components/site-profile";
 import { Listing, type ListingParams } from "../../../_components/Listing";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<ListingParams> };
@@ -17,11 +18,15 @@ async function findBrand(slug: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const found = await findBrand((await params).slug);
+  const [found, site] = await Promise.all([findBrand((await params).slug), getShopSite()]);
   if (!found) return { title: "Brand not found" };
+  const description =
+    site === "champika"
+      ? `${found.brand.name} at wholesale prices — carton rates and delivery ${siteProfile(site).deliveryWhere}.`
+      : `Shop genuine ${found.brand.name} wiring accessories online — discount prices and fast delivery in the Galle area.`;
   return {
     title: `${found.brand.name} products`,
-    description: `Shop genuine ${found.brand.name} wiring accessories online — discount prices and fast delivery in the Galle area.`,
+    description,
     alternates: { canonical: `/b/${found.brand.slug}` },
   };
 }

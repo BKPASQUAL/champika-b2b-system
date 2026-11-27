@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError, getAllowedMainCategories } from "@/lib/web-utils";
+import { withSite } from "@/lib/web-site";
 import { refreshShop } from "@/lib/shop-cache";
 
 const schema = z.object({
@@ -23,9 +24,10 @@ const schema = z.object({
 export async function GET() {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const [{ data, error }, { data: cats }, allowed] = await Promise.all([
-      supabaseAdmin.from("web_settings").select("key, value"),
+      supabaseAdmin.from("web_settings").select("key, value").eq("site", site),
       supabaseAdmin.from("categories").select("name").eq("type", "category").order("name"),
       getAllowedMainCategories(),
     ]);
@@ -44,11 +46,12 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const v = schema.parse(await request.json());
     const now = new Date().toISOString();
     const { error } = await supabaseAdmin.from("web_settings").upsert(
-      Object.entries(v).map(([key, value]) => ({ key, value, updated_at: now })),
+      withSite(Object.entries(v).map(([key, value]) => ({ key, value, updated_at: now })), site),
     );
     if (error) throw error;
     refreshShop();

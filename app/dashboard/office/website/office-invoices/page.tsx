@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { useWebPortal } from "@/app/dashboard/office/website/_site";
 
 type Row = {
   id: string;
@@ -26,22 +26,24 @@ const lkr = (n: number) => `LKR ${Number(n || 0).toLocaleString("en-LK", { minim
 const statusTone =(s: string) =>
   s === "Paid" ? "bg-green-100 text-green-700 border-green-200" : s === "Partial" ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-red-100 text-red-700 border-red-200";
 
-/** Invoices created from BK Wiring quotations (website business). */
+/** Invoices created from this shop's quotations (the shop's own business). */
 export default function BkWiringInvoicesPage() {
   const router = useRouter();
+  const { base, businessId, shopName } = useWebPortal();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
   const load = () => {
     setLoading(true);
-    fetch(`/api/invoices?businessId=${BUSINESS_IDS.WEBSITE}`, { cache: "no-store" })
+    fetch(`/api/invoices?businessId=${businessId}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setRows(Array.isArray(d) ? d : d.invoices || d.data || []))
       .catch(() => toast.error("Failed to load invoices"))
       .finally(() => setLoading(false));
   };
-  useEffect(load, []);
+
+  useEffect(load, [businessId]);
 
   const s = q.toLowerCase();
   const shown = rows.filter((r) => !s || r.invoiceNo?.toLowerCase().includes(s) || r.customerName?.toLowerCase().includes(s));
@@ -51,12 +53,12 @@ export default function BkWiringInvoicesPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">BK Wiring Invoices</h1>
-          <p className="text-sm text-muted-foreground">Invoices created from BK Wiring quotations. Outstanding: <b>{lkr(due)}</b></p>
+          <h1 className="text-2xl font-bold">{shopName} Invoices</h1>
+          <p className="text-sm text-muted-foreground">Invoices created from {shopName} quotations. Outstanding: <b>{lkr(due)}</b></p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load}><RefreshCw className="w-4 h-4" /></Button>
-          <Button size="sm" className="bg-teal-600 hover:bg-teal-700" onClick={() => router.push("/dashboard/office/website/office-quotations/create")}>
+          <Button size="sm" className="bg-teal-600 hover:bg-teal-700" onClick={() => router.push(`${base}/office-quotations/create`)}>
             New Quotation
           </Button>
         </div>
@@ -72,14 +74,14 @@ export default function BkWiringInvoicesPage() {
         {!loading && shown.length === 0 && (
           <div className="p-10 text-center text-muted-foreground">
             <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            No invoices yet. Open a BK Wiring quotation and click “Convert to Bill”.
+            No invoices yet. Open a {shopName} quotation and click “Convert to Bill”.
           </div>
         )}
         {shown.map((r) => (
           <button
             key={r.id}
             type="button"
-            onClick={() => router.push(`/dashboard/office/website/office-invoices/${r.id}`)}
+            onClick={() => router.push(`${base}/office-invoices/${r.id}`)}
             className="w-full text-left flex items-center gap-3 p-3 hover:bg-muted/40"
           >
             <div className="flex-1 min-w-0">

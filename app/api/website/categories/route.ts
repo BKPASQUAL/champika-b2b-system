@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError, uniqueSlug } from "@/lib/web-utils";
+import { withSite } from "@/lib/web-site";
 import { refreshShop } from "@/lib/shop-cache";
 
 const schema = z.object({
@@ -19,10 +20,11 @@ const schema = z.object({
 export async function GET() {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const [{ data, error }, { data: counts }] = await Promise.all([
-      supabaseAdmin.from("web_categories").select("*").order("sort_order").order("name"),
-      supabaseAdmin.from("web_products").select("web_category_id, web_sub_category_id"),
+      supabaseAdmin.from("web_categories").select("*").eq("site", site).order("sort_order").order("name"),
+      supabaseAdmin.from("web_products").select("web_category_id, web_sub_category_id").eq("site", site),
     ]);
     if (error) throw error;
     const countMap: Record<string, number> = {};
@@ -53,6 +55,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const v = schema.parse(await request.json());
     if (v.id && v.parentId === v.id) throw new Error("A category cannot be its own parent");
@@ -69,8 +72,8 @@ export async function POST(request: NextRequest) {
     // Only written when sent, so saving still works before the wall_preview column exists.
     if (v.wallPreview !== undefined) row.wall_preview = v.wallPreview;
     const q = v.id
-      ? supabaseAdmin.from("web_categories").update(row).eq("id", v.id)
-      : supabaseAdmin.from("web_categories").insert(row);
+      ? supabaseAdmin.from("web_categories").update(row).eq("site", site).eq("id", v.id)
+      : supabaseAdmin.from("web_categories").insert(withSite(row, site));
     const { data, error } = await q.select().single();
     if (error) throw error;
     refreshShop();
@@ -83,11 +86,12 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   const id = request.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
   try {
     // Products and sub-categories keep existing; their category is cleared (ON DELETE SET NULL).
-    const { error } = await supabaseAdmin.from("web_categories").delete().eq("id", id);
+    const { error } = await supabaseAdmin.from("web_categories").delete().eq("site", site).eq("id", id);
     if (error) throw error;
     refreshShop();
     return NextResponse.json({ success: true });

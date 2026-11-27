@@ -1,7 +1,8 @@
-import { SHOP_URL } from "@/lib/shop-host";
+import { getShopUrl } from "@/lib/shop-data";
 
-/** bkwiringbadukade.lk/robots.txt */
-export function GET() {
+/** <shop domain>/robots.txt (each shop points to its own sitemap). */
+export async function GET() {
+  const SHOP_URL = await getShopUrl();
   const body = [
     "User-agent: *",
     "Allow: /",

@@ -86,8 +86,7 @@ ALTER TABLE web_brands ADD COLUMN IF NOT EXISTS is_active   BOOLEAN DEFAULT TRUE
 ALTER TABLE web_brands ADD COLUMN IF NOT EXISTS created_at  TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE web_brands ADD COLUMN IF NOT EXISTS updated_at  TIMESTAMPTZ DEFAULT NOW();
 -- Same name allowed under different parents (Orange → Orange), not twice under one parent.
-CREATE UNIQUE INDEX IF NOT EXISTS uq_web_brands_parent_name
-  ON web_brands (COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'::uuid), lower(name));
+-- The unique index (now per shop) is created in section 17.
 
 -- 2c. Suppliers (internal — not shown to customers)
 CREATE TABLE IF NOT EXISTS web_suppliers (
@@ -106,7 +105,7 @@ ALTER TABLE web_suppliers ADD COLUMN IF NOT EXISTS notes      TEXT;
 ALTER TABLE web_suppliers ADD COLUMN IF NOT EXISTS is_active  BOOLEAN DEFAULT TRUE;
 ALTER TABLE web_suppliers ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE web_suppliers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-CREATE UNIQUE INDEX IF NOT EXISTS uq_web_suppliers_name ON web_suppliers (lower(name));
+-- Unique supplier name (per shop) is created in section 17.
 
 -- 3. Website products = one product PAGE (name, text, specs, images).
 --    Price / stock link lives in web_product_variants (exactly one row per product).
@@ -441,7 +440,7 @@ INSERT INTO web_settings (key, value) VALUES
   ('bank',     '{"bank": "", "branch": "", "account_name": "", "account_no": ""}'),
   ('store',    '{"name": "BK Wiring", "phone": "", "whatsapp": "", "address": "", "email": ""}'),
   ('catalog',  '{"allowed_categories": ["Wiring Accessories"]}')
-ON CONFLICT (key) DO NOTHING;
+ON CONFLICT DO NOTHING;  -- no target: works before and after section 17 makes the key (site, key)
 
 -- 10. Private storage bucket for payment slips & quote attachments -----
 INSERT INTO storage.buckets (id, name, public)
@@ -592,3 +591,65 @@ ALTER TABLE web_products ADD COLUMN IF NOT EXISTS warranty_terms  TEXT;
 --   preview on the shop product page. Managed in Office → Website → Categories.
 -- ============================================================================
 ALTER TABLE web_categories ADD COLUMN IF NOT EXISTS wall_preview BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ============================================================================
+-- 17. Two shops on one system: BK Wiring ('bk') and Champika Hardware ('champika')
+--   Every shop table gets a `site` column. Existing rows are BK. Each shop
+--   has its own categories, brands, products, prices, banners, settings,
+--   customers, orders and quotes. Slugs and names are unique PER SHOP.
+--   The Champika shop is its own business ("Champika Website").
+-- ============================================================================
+INSERT INTO businesses (id, name, description)
+VALUES ('f1031e63-4cef-4118-b5a7-075db180d9e2', 'Champika Website', 'Online wholesale shop - Champika Hardware & Distribution')
+ON CONFLICT (id) DO NOTHING;
+
+DO $$
+DECLARE t TEXT;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['web_categories','web_brands','web_product_families','web_suppliers','web_products',
+                           'web_banners','web_promo_strip','web_price_rules','web_settings',
+                           'web_customers','web_orders','web_quote_requests']
+  LOOP
+    EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS site TEXT NOT NULL DEFAULT ''bk''', t);
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = t || '_site_check') THEN
+      EXECUTE format('ALTER TABLE %I ADD CONSTRAINT %I CHECK (site IN (''bk'',''champika''))', t, t || '_site_check');
+    END IF;
+    EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I (site)', 'idx_' || t || '_site', t);
+  END LOOP;
+END $$;
+
+-- Slugs: unique per shop (was unique across everything).
+DO $$
+DECLARE t TEXT;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['web_categories','web_brands','web_product_families','web_products']
+  LOOP
+    EXECUTE format('ALTER TABLE %I DROP CONSTRAINT IF EXISTS %I', t, t || '_slug_key');
+    EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS %I ON %I (site, slug)', 'uq_' || t || '_site_slug', t);
+  END LOOP;
+END $$;
+
+-- Brand names (per parent) and supplier names: unique per shop.
+DROP INDEX IF EXISTS uq_web_brands_parent_name;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_web_brands_site_parent_name
+  ON web_brands (site, COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'::uuid), lower(name));
+DROP INDEX IF EXISTS uq_web_suppliers_name;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_web_suppliers_site_name ON web_suppliers (site, lower(name));
+
+-- Settings: one row per (shop, key).
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+    WHERE c.conname = 'web_settings_pkey' GROUP BY c.conname HAVING count(*) = 1
+  ) THEN
+    ALTER TABLE web_settings DROP CONSTRAINT web_settings_pkey;
+    ALTER TABLE web_settings ADD PRIMARY KEY (site, key);
+  END IF;
+END $$;
+
+INSERT INTO web_settings (site, key, value) VALUES
+  ('champika', 'delivery', '{"flat_fee": 0, "free_over": 0, "areas": ""}'),
+  ('champika', 'bank',     '{"bank": "", "branch": "", "account_name": "", "account_no": ""}'),
+  ('champika', 'store',    '{"name": "Champika Hardware & Distribution", "phone": "", "whatsapp": "", "address": "", "email": "", "hours": "", "map_url": ""}'),
+  ('champika', 'catalog',  '{"allowed_categories": []}')
+ON CONFLICT DO NOTHING;

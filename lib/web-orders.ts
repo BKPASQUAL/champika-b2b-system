@@ -1,6 +1,6 @@
 import { NextRequest, after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { getRequestSite, siteBusinessId, type WebSite } from "@/lib/web-site";
 import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 import { getMainWarehouseStock } from "@/lib/web-utils";
 import { formatAddress } from "@/lib/shop-address";
@@ -11,7 +11,8 @@ import { POST as cancelInvoice } from "@/app/api/invoices/[id]/cancel/route";
 /**
  * Office-side processing of online shop orders.
  *
- * Confirm → creates a normal B2B invoice under the WEBSITE business by calling
+ * Confirm → creates a normal B2B invoice under the shop's business (BK Wiring
+ * Website or Champika Website — see siteBusinessId) by calling
  * the same code the office uses (FIFO cost, stock out of the Main Warehouse,
  * invoice number WB-…). Delivered → agency bills (OR-WE / WE / SI-WE) are
  * rebuilt like Distribution's. Payments go through the normal payments code.
@@ -62,6 +63,7 @@ async function loadOrder(id: string) {
     .from("web_orders")
     .select("*, web_customers(id, full_name, email, phone, customer_id), web_order_items(product_id, name, qty, unit_price, mrp, line_total)")
     .eq("id", id)
+    .eq("site", await getRequestSite()) // staff of one shop can't touch the other shop's orders
     .maybeSingle();
   if (error) throw error;
   if (!data) throw new WebOrderError("Order not found", 404);
@@ -78,7 +80,10 @@ async function logNote(orderId: string, staff: Staff, text: string) {
     .eq("id", orderId);
 }
 
-/** The B2B customer (WEBSITE business) for a web customer, created on first confirmed order. */
+/** Shop of an order row ("bk" for rows made before the two-shop change). */
+const orderSite = (order: any): WebSite => (order?.site === "champika" ? "champika" : "bk");
+
+/** The B2B customer (the shop's business) for a web customer, created on first confirmed order. */
 async function ensureB2BCustomer(order: any): Promise<string> {
   const wc = order.web_customers;
   if (wc?.customer_id) {
@@ -94,11 +99,11 @@ async function ensureB2BCustomer(order: any): Promise<string> {
       phone: wc?.phone || order.delivery_phone || "",
       email: wc?.email || null,
       address: formatAddress(order.delivery_address),
-      route: "Website",
+      route: orderSite(order) === "champika" ? "Online" : "Website",
       status: "Active",
       credit_limit: 0,
       outstanding_balance: 0,
-      business_id: BUSINESS_IDS.WEBSITE,
+      business_id: siteBusinessId(orderSite(order)),
     })
     .select("id")
     .single();
@@ -177,7 +182,7 @@ export async function confirmOrder(orderId: string, staff: Staff, opts: { force?
 
   const result = await callHandler(createInvoice, "/api/invoices", {
     customerId,
-    businessId: BUSINESS_IDS.WEBSITE,
+    businessId: siteBusinessId(orderSite(order)),
     salesRepId: null,
     userId: staff.id,
     items,
@@ -263,7 +268,7 @@ export async function setStatus(orderId: string, staff: Staff, next: string) {
     const productIds = [...new Set((order.web_order_items as any[]).map((i) => i.product_id))];
     after(async () => {
       try {
-        await triggerAgencyBillsForInvoice(BUSINESS_IDS.WEBSITE, productIds);
+        await triggerAgencyBillsForInvoice(siteBusinessId(orderSite(order)), productIds);
       } catch (e) {
         console.error("[Website] agency bill update failed (non-critical)", e);
       }

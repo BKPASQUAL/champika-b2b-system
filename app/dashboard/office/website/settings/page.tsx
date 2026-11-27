@@ -20,7 +20,7 @@ type Settings = {
 const defaults: Settings = {
   delivery: { flat_fee: 0, free_over: 0, areas: "" },
   bank: { bank: "", branch: "", account_name: "", account_no: "" },
-  store: { name: "BK Wiring", phone: "", whatsapp: "", address: "", email: "", hours: "", map_url: "" },
+  store: { name: "", phone: "", whatsapp: "", address: "", email: "", hours: "", map_url: "" },
   catalog: { allowed_categories: ["Wiring Accessories"] },
 };
 

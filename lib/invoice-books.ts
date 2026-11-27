@@ -138,6 +138,8 @@ export async function getNextInvoiceNumber(
     [BUSINESS_IDS.SIERRA_AGENCY]:         "SI",
     [BUSINESS_IDS.WIREMAN_AGENCY]:        "WI",
     [BUSINESS_IDS.WEBSITE]:               "WB",
+    // Not "CW": Wireman's monthly agency bill for this shop is "CW-YYYY-MM".
+    [BUSINESS_IDS.CHAMPIKA_WEBSITE]:      "CWB",
   };
 
   const resolvedBusinessId = businessId || BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;

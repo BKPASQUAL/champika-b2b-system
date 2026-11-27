@@ -13,7 +13,7 @@ export type QuotationPortal = {
   /** Route of the quotation list, e.g. /dashboard/office/retail/quotations */
   basePath: string;
   /** Print header (key of DIVISIONS in invoice-html). */
-  division: "retail" | "website";
+  division: "retail" | "website" | "online";
   /** Page that shows an invoice created from a quotation. */
   invoicePath: (invoiceId: string) => string;
   /** "walkin" = open Retail's walk-in sale; "api" = convert straight to an invoice. */
@@ -43,6 +43,17 @@ export const WEBSITE_QUOTATION_PORTAL: QuotationPortal = {
   convertMode: "api",
   title: "BK Wiring Quotations",
   subtitle: "Quotations with the BK Wiring header — convert to a BK Wiring invoice when the customer confirms.",
+  allowNewCustomer: true,
+};
+
+export const CHAMPIKA_WEB_QUOTATION_PORTAL: QuotationPortal = {
+  businessId: BUSINESS_IDS.CHAMPIKA_WEBSITE,
+  basePath: "/dashboard/office/champika-website/office-quotations",
+  division: "online",
+  invoicePath: (id) => `/dashboard/office/champika-website/office-invoices/${id}`,
+  convertMode: "api",
+  title: "Champika Online Quotations",
+  subtitle: "Wholesale quotations for the Champika online shop — convert to an invoice when the customer confirms.",
   allowNewCustomer: true,
 };
 

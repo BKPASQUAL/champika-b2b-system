@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError } from "@/lib/web-utils";
+import { withSite } from "@/lib/web-site";
 import { refreshShop } from "@/lib/shop-cache";
 
 // Items for the black promotion strip on the shop home page.
@@ -37,8 +38,9 @@ const toApi = (r: any) => ({
 export async function GET() {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
-    const { data, error } = await supabaseAdmin.from("web_promo_strip").select("*").order("sort_order");
+    const { data, error } = await supabaseAdmin.from("web_promo_strip").select("*").eq("site", site).order("sort_order");
     if (error) {
       if (/web_promo_strip/.test(error.message)) {
         return NextResponse.json({ error: "Run supabase/migrations/website_shop.sql once to add the promo strip table." }, { status: 400 });
@@ -54,6 +56,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const v = schema.parse(await request.json());
     if (v.badgeMode === "text" && !v.badgeText) {
@@ -73,8 +76,8 @@ export async function POST(request: NextRequest) {
       ends_at: v.endsAt ? new Date(`${v.endsAt.slice(0, 10)}T23:59:59+05:30`).toISOString() : null,
     };
     const q = v.id
-      ? supabaseAdmin.from("web_promo_strip").update(row).eq("id", v.id)
-      : supabaseAdmin.from("web_promo_strip").insert(row);
+      ? supabaseAdmin.from("web_promo_strip").update(row).eq("site", site).eq("id", v.id)
+      : supabaseAdmin.from("web_promo_strip").insert(withSite(row, site));
     const { data, error } = await q.select().single();
     if (error) throw error;
     refreshShop();
@@ -87,10 +90,11 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   const id = request.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
   try {
-    const { error } = await supabaseAdmin.from("web_promo_strip").delete().eq("id", id);
+    const { error } = await supabaseAdmin.from("web_promo_strip").delete().eq("site", site).eq("id", id);
     if (error) throw error;
     refreshShop();
     return NextResponse.json({ success: true });

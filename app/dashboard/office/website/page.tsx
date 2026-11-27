@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Package, Eye, EyeOff, FolderTree, ShoppingCart, FileText, Users, BadgeCheck, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { webApi } from "./_components/api";
+import { useWebPortal } from "@/app/dashboard/office/website/_site";
 
 type Stats = {
   products: number;
@@ -17,9 +18,10 @@ type Stats = {
   tradePending: number;
 };
 
-const BASE = "/dashboard/office/website";
 
 export default function WebsiteDashboardPage() {
+  const portalHome = useWebPortal().base;
+  const { title } = useWebPortal();
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState("");
 
@@ -29,14 +31,14 @@ export default function WebsiteDashboardPage() {
 
   const cards = stats
     ? [
-        { label: "New orders", value: stats.newOrders, icon: ShoppingCart, href: `${BASE}/orders`, hot: stats.newOrders > 0 },
-        { label: "Quotation requests", value: stats.openQuotes, icon: FileText, href: `${BASE}/quotations`, hot: stats.openQuotes > 0 },
-        { label: "Trade approvals waiting", value: stats.tradePending, icon: BadgeCheck, href: `${BASE}/customers`, hot: stats.tradePending > 0 },
-        { label: "Customers", value: stats.customers, icon: Users, href: `${BASE}/customers` },
-        { label: "Website products", value: stats.products, icon: Package, href: `${BASE}/products` },
-        { label: "Published", value: stats.published, icon: Eye, href: `${BASE}/products` },
-        { label: "Marked out of stock", value: stats.unavailable, icon: EyeOff, href: `${BASE}/products` },
-        { label: "Categories", value: stats.categories, icon: FolderTree, href: `${BASE}/categories` },
+        { label: "New orders", value: stats.newOrders, icon: ShoppingCart, href: `${portalHome}/orders`, hot: stats.newOrders > 0 },
+        { label: "Quotation requests", value: stats.openQuotes, icon: FileText, href: `${portalHome}/quotations`, hot: stats.openQuotes > 0 },
+        { label: "Trade approvals waiting", value: stats.tradePending, icon: BadgeCheck, href: `${portalHome}/customers`, hot: stats.tradePending > 0 },
+        { label: "Customers", value: stats.customers, icon: Users, href: `${portalHome}/customers` },
+        { label: "Website products", value: stats.products, icon: Package, href: `${portalHome}/products` },
+        { label: "Published", value: stats.published, icon: Eye, href: `${portalHome}/products` },
+        { label: "Marked out of stock", value: stats.unavailable, icon: EyeOff, href: `${portalHome}/products` },
+        { label: "Categories", value: stats.categories, icon: FolderTree, href: `${portalHome}/categories` },
       ]
     : [];
 
@@ -44,7 +46,7 @@ export default function WebsiteDashboardPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Website Dashboard</h2>
-        <p className="text-muted-foreground text-sm">Online shop overview — bkwiringbadukade.lk</p>
+        <p className="text-muted-foreground text-sm">Online shop overview — {title}</p>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}

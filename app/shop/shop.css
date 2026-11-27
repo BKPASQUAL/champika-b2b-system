@@ -49,6 +49,65 @@
   color-scheme: dark;
 }
 
+/*
+ * Champika Hardware & Distribution shop (data-site="champika"): red + navy from
+ * the CH logo. Red #D50F0F for actions, darker red #B80D0D for red text (passes
+ * 4.5:1 on white), navy #0F1E33 for bars and main text, cool greys behind.
+ */
+.shop-root[data-site="champika"] {
+  --s-bg: #f3f5f8;
+  --s-surface: #ffffff;
+  --s-soft: #eef2f7;
+  --s-img: #f6f8fb;
+  --s-ink: #0f1e33;
+  --s-ink-2: #2e3a4d;
+  --s-muted: #556275;
+  --s-line: #e2e7ee;
+  --s-btn: #0f1e33;
+  --s-btn-ink: #ffffff;
+  --s-accent: #d50f0f;
+  --s-accent-hover: #b80d0d;
+  --s-accent-soft: #fdecec;
+  --s-accent-ink: #ffffff;
+  --s-accent-text: #b80d0d;
+  --s-bar: #0f1e33;
+  --s-bar-line: #1d3150;
+  --s-good: #15803d;
+  --s-bad: #b80d0d;
+}
+.shop-root[data-site="champika"].shop-dark {
+  --s-bg: #0a1424;
+  --s-surface: #0f1e33;
+  --s-soft: #17294a;
+  --s-img: #f1f4f8;
+  --s-ink: #f4f6fa;
+  --s-ink-2: #c3ccd9;
+  --s-muted: #8d99aa;
+  --s-line: #1d3150;
+  --s-btn: #d50f0f;
+  --s-btn-ink: #ffffff;
+  --s-accent: #ef3b31;
+  --s-accent-hover: #d50f0f;
+  --s-accent-soft: rgba(239, 59, 49, 0.15);
+  --s-accent-ink: #ffffff;
+  --s-accent-text: #ff8378;
+  --s-bar: #08111f;
+  --s-bar-line: #1d3150;
+  --s-good: #4ade80;
+  --s-bad: #ff8378;
+}
+/* Bits shown on one shop only (shared components carry both; CSS hides the other shop's). */
+.shop-root:not([data-site="champika"]) .ch-only,
+.shop-root[data-site="champika"] .bk-only {
+  display: none !important;
+}
+
+/* Champika headings: Montserrat, like the logo lettering. */
+.shop-root[data-site="champika"] .ch-display {
+  font-family: var(--font-ch-display), var(--font-geist-sans), sans-serif;
+  letter-spacing: -0.01em;
+}
+
 .shop-root {
   background: var(--s-bg);
   color: var(--s-ink);

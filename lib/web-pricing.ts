@@ -1,14 +1,16 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { WebPriceRule, PriceTier, ResolvedPrice } from "@/lib/web-pricing-core";
 import { resolveWebPrice } from "@/lib/web-pricing-core";
+import type { WebSite } from "@/app/config/business-constants";
 
 export * from "@/lib/web-pricing-core";
 
-/** Load all active price rules (small table — fine to load per request). */
-export async function loadPriceRules(): Promise<WebPriceRule[]> {
+/** Load one shop's active price rules (small table — fine to load per request). */
+export async function loadPriceRules(site: WebSite): Promise<WebPriceRule[]> {
   const { data, error } = await supabaseAdmin
     .from("web_price_rules")
     .select("id, scope, scope_value, tier, method, value, priority, is_active")
+    .eq("site", site)
     .eq("is_active", true);
   if (error) throw new Error(`Failed to load price rules: ${error.message}`);
   return (data || []) as WebPriceRule[];

@@ -12,6 +12,7 @@ import { apiError, getAllowedMainCategories, getMainWarehouseStock } from "@/lib
 export async function GET(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const sp = request.nextUrl.searchParams;
     const allowed = await getAllowedMainCategories();
@@ -54,7 +55,11 @@ export async function GET(request: NextRequest) {
     const [stock, { data: linked }] = await Promise.all([
       getMainWarehouseStock(ids),
       ids.length
-        ? supabaseAdmin.from("web_product_variants").select("product_id").in("product_id", ids)
+        ? supabaseAdmin
+            .from("web_product_variants")
+            .select("product_id, web_products!inner(site)") // linked in THIS shop
+            .eq("web_products.site", site)
+            .in("product_id", ids)
         : Promise.resolve({ data: [] as any[] }),
     ]);
     const linkedSet = new Set((linked || []).map((r: any) => r.product_id));

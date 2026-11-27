@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireWebsiteStaff } from "@/lib/web-auth";
+import { withSite } from "@/lib/web-site";
 import { apiError } from "@/lib/web-utils";
 
 const schema = z.object({
@@ -15,10 +16,11 @@ const schema = z.object({
 export async function GET() {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const [{ data, error }, { data: prods }] = await Promise.all([
-      supabaseAdmin.from("web_suppliers").select("*").order("name"),
-      supabaseAdmin.from("web_products").select("web_supplier_id"),
+      supabaseAdmin.from("web_suppliers").select("*").eq("site", site).order("name"),
+      supabaseAdmin.from("web_products").select("web_supplier_id").eq("site", site),
     ]);
     if (error) throw error;
     const countMap: Record<string, number> = {};
@@ -41,6 +43,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const v = schema.parse(await request.json());
     const row = {
@@ -51,8 +54,8 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await (v.id
-      ? supabaseAdmin.from("web_suppliers").update(row).eq("id", v.id)
-      : supabaseAdmin.from("web_suppliers").insert(row)
+      ? supabaseAdmin.from("web_suppliers").update(row).eq("site", site).eq("id", v.id)
+      : supabaseAdmin.from("web_suppliers").insert(withSite(row, site))
     )
       .select()
       .single();
@@ -69,10 +72,11 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   const id = request.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
   try {
-    const { error } = await supabaseAdmin.from("web_suppliers").delete().eq("id", id);
+    const { error } = await supabaseAdmin.from("web_suppliers").delete().eq("site", site).eq("id", id);
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (e) {

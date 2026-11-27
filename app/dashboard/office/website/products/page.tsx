@@ -16,10 +16,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { webApi, rs } from "../_components/api";
 import { MainProduct, useMainFacets, useMainProductSearch } from "../_components/MainProductSearch";
 import type { WebBrand, WebCategory, WebProduct } from "../_components/types";
+import { useWebPortal } from "@/app/dashboard/office/website/_site";
 
-const BASE = "/dashboard/office/website/products";
 
 export default function WebsiteProductsPage() {
+  const portalHome = useWebPortal().base;
   const [items, setItems] = useState<WebProduct[]>([]);
   const [categories, setCategories] = useState<WebCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,7 +99,7 @@ export default function WebsiteProductsPage() {
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Download className="h-4 w-4 mr-1" /> Import from main products
           </Button>
-          <Link href={`${BASE}/new`}>
+          <Link href={`${portalHome}/products/new`}>
             <Button className="bg-teal-600 hover:bg-teal-700">
               <Plus className="h-4 w-4 mr-1" /> New Product
             </Button>
@@ -215,7 +216,7 @@ export default function WebsiteProductsPage() {
                   <td className="p-3 text-center"><Switch checked={v.isAvailable} onCheckedChange={(val) => setStock(p, val)} /></td>
                   <td className="p-3 text-center"><Switch checked={p.isPublished} onCheckedChange={(val) => setFlag(p, "isPublished", val)} /></td>
                   <td className="p-3 whitespace-nowrap">
-                    <Link href={`${BASE}/${p.id}`}><Button size="icon" variant="ghost"><Pencil className="h-4 w-4" /></Button></Link>
+                    <Link href={`${portalHome}/products/${p.id}`}><Button size="icon" variant="ghost"><Pencil className="h-4 w-4" /></Button></Link>
                     <Button size="icon" variant="ghost" onClick={() => remove(p)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
                   </td>
                 </tr>

@@ -894,7 +894,9 @@ export async function POST(request: NextRequest) {
     } else {
       // Non-retail: use rep's assigned locations.
       // Website (online shop) orders always ship from the Main Warehouse.
-      if (resolvedBusinessId !== BUSINESS_IDS.WEBSITE && val.salesRepId) {
+      const isOnlineShop =
+        resolvedBusinessId === BUSINESS_IDS.WEBSITE || resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_WEBSITE;
+      if (!isOnlineShop && val.salesRepId) {
         const { data: assignments } = await supabaseAdmin
           .from("location_assignments")
           .select("location_id")

@@ -341,6 +341,8 @@ interface AgencyConfig {
   retailPrefix: string;
   distributionPrefix: string;
   websitePrefix: string;
+  /** Champika online wholesale shop (separate from the BK website bill). */
+  onlinePrefix: string;
 }
 
 export const AGENCY_CONFIGS: AgencyConfig[] = [
@@ -350,6 +352,7 @@ export const AGENCY_CONFIGS: AgencyConfig[] = [
     retailPrefix: "OR-RE",
     distributionPrefix: "OR-DI",
     websitePrefix: "OR-WE",
+    onlinePrefix: "OR-CW",
   },
   {
     agencyBusinessId: BUSINESS_IDS.WIREMAN_AGENCY,
@@ -357,6 +360,7 @@ export const AGENCY_CONFIGS: AgencyConfig[] = [
     retailPrefix: "RE",
     distributionPrefix: "DI",
     websitePrefix: "WE",
+    onlinePrefix: "CW",
   },
   {
     agencyBusinessId: BUSINESS_IDS.SIERRA_AGENCY,
@@ -364,6 +368,7 @@ export const AGENCY_CONFIGS: AgencyConfig[] = [
     retailPrefix: "SI-RE",
     distributionPrefix: "SI-DI",
     websitePrefix: "SI-WE",
+    onlinePrefix: "SI-CW",
   },
 ];
 
@@ -371,10 +376,11 @@ export const AGENCY_CONFIGS: AgencyConfig[] = [
  * Champika businesses that get monthly agency bills, the customer name used in
  * the agency portals, and which AGENCY_CONFIGS prefix they use.
  */
-export const BILLING_TARGETS: { id: string; label: string; prefixKey: "retailPrefix" | "distributionPrefix" | "websitePrefix" }[] = [
+export const BILLING_TARGETS: { id: string; label: string; prefixKey: "retailPrefix" | "distributionPrefix" | "websitePrefix" | "onlinePrefix" }[] = [
   { id: BUSINESS_IDS.CHAMPIKA_RETAIL, label: "Champika Hardware - Retail", prefixKey: "retailPrefix" },
   { id: BUSINESS_IDS.CHAMPIKA_DISTRIBUTION, label: "Champika Hardware - Distribution", prefixKey: "distributionPrefix" },
   { id: BUSINESS_IDS.WEBSITE, label: "Champika Hardware - Website", prefixKey: "websitePrefix" },
+  { id: BUSINESS_IDS.CHAMPIKA_WEBSITE, label: "Champika Hardware - Online", prefixKey: "onlinePrefix" },
 ];
 
 /**

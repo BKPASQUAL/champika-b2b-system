@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { slugify } from "@/lib/web-utils";
+import { getRequestSite } from "@/lib/web-site";
 
 /** Slug for a brand: "acl", or "acl-fire-guard" for a sub brand. */
 export function brandSlug(name: string, parentSlug?: string | null) {
@@ -7,7 +8,7 @@ export function brandSlug(name: string, parentSlug?: string | null) {
 }
 
 /**
- * Brand id for each name under one parent (null = top-level brand), creating
+ * Brand id (this shop) for each name under one parent (null = top-level brand), creating
  * brands that don't exist yet. Matching is case-insensitive.
  */
 export async function ensureBrands(names: string[], parentId: string | null = null): Promise<Map<string, string>> {
@@ -15,7 +16,8 @@ export async function ensureBrands(names: string[], parentId: string | null = nu
   const result = new Map<string, string>();
   if (!wanted.length) return result;
 
-  let q = supabaseAdmin.from("web_brands").select("id, name");
+  const site = await getRequestSite();
+  let q = supabaseAdmin.from("web_brands").select("id, name").eq("site", site);
   q = parentId ? q.eq("parent_id", parentId) : q.is("parent_id", null);
   const { data: existing } = await q;
   const byLower = new Map((existing || []).map((b: any) => [b.name.toLowerCase(), b.id as string]));
@@ -29,7 +31,7 @@ export async function ensureBrands(names: string[], parentId: string | null = nu
     }
     const { data: created, error } = await supabaseAdmin
       .from("web_brands")
-      .insert(missing.map((name) => ({ name, slug: brandSlug(name, parentSlug), parent_id: parentId })))
+      .insert(missing.map((name) => ({ site, name, slug: brandSlug(name, parentSlug), parent_id: parentId })))
       .select("id, name");
     if (error) throw error;
     for (const b of created || []) byLower.set(b.name.toLowerCase(), b.id);
@@ -43,13 +45,14 @@ export async function ensureSuppliers(names: string[]): Promise<Map<string, stri
   const wanted = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
   const result = new Map<string, string>();
   if (!wanted.length) return result;
-  const { data: existing } = await supabaseAdmin.from("web_suppliers").select("id, name");
+  const site = await getRequestSite();
+  const { data: existing } = await supabaseAdmin.from("web_suppliers").select("id, name").eq("site", site);
   const byLower = new Map((existing || []).map((s: any) => [s.name.toLowerCase(), s.id as string]));
   const missing = wanted.filter((n) => !byLower.has(n.toLowerCase()));
   if (missing.length) {
     const { data: created, error } = await supabaseAdmin
       .from("web_suppliers")
-      .insert(missing.map((name) => ({ name })))
+      .insert(missing.map((name) => ({ site, name })))
       .select("id, name");
     if (error) throw error;
     for (const s of created || []) byLower.set(s.name.toLowerCase(), s.id);

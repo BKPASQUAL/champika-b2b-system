@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getRequestSite } from "@/lib/web-site";
 
 /** "Orange 13A Switch (White)" → "orange-13a-switch-white" */
 export function slugify(text: string): string {
@@ -13,14 +14,18 @@ export function slugify(text: string): string {
   );
 }
 
-/** Slug that is not used yet in `table` (adds -2, -3 … when needed). */
+/** Slug that is not used yet in `table` for this shop (adds -2, -3 … when needed). */
 export async function uniqueSlug(
   table: "web_products" | "web_categories",
   base: string,
   ignoreId?: string,
 ): Promise<string> {
   const root = slugify(base);
-  const { data } = await supabaseAdmin.from(table).select("id, slug").ilike("slug", `${root}%`);
+  const { data } = await supabaseAdmin
+    .from(table)
+    .select("id, slug")
+    .eq("site", await getRequestSite())
+    .ilike("slug", `${root}%`);
   const taken = new Set((data || []).filter((r: any) => r.id !== ignoreId).map((r: any) => r.slug));
   if (!taken.has(root)) return root;
   let i = 2;
@@ -78,11 +83,16 @@ export const apiError = (e: any, status = 500) => {
 export const DEFAULT_ALLOWED_CATEGORIES = ["Wiring Accessories"];
 
 /**
- * B2B (main) categories the website may sell, from Shop Settings → "catalog".
+ * B2B (main) categories this shop may sell, from Shop Settings → "catalog".
  * No saved setting → DEFAULT_ALLOWED_CATEGORIES. Saved empty list → all categories.
  */
 export async function getAllowedMainCategories(): Promise<string[]> {
-  const { data } = await supabaseAdmin.from("web_settings").select("value").eq("key", "catalog").maybeSingle();
+  const { data } = await supabaseAdmin
+    .from("web_settings")
+    .select("value")
+    .eq("site", await getRequestSite())
+    .eq("key", "catalog")
+    .maybeSingle();
   if (!data) return DEFAULT_ALLOWED_CATEGORIES;
   const list = (data.value as any)?.allowed_categories;
   return Array.isArray(list) ? list.filter(Boolean) : DEFAULT_ALLOWED_CATEGORIES;

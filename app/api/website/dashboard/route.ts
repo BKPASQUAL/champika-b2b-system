@@ -7,9 +7,14 @@ import { apiError } from "@/lib/web-utils";
 export async function GET() {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
+    // Every count is for this shop only (variants via their website product).
     const count = (table: string, f?: (q: any) => any) => {
-      let q = supabaseAdmin.from(table).select("id", { count: "exact", head: true });
+      let q =
+        table === "web_product_variants"
+          ? supabaseAdmin.from(table).select("id, web_products!inner(site)", { count: "exact", head: true }).eq("web_products.site", site)
+          : supabaseAdmin.from(table).select("id", { count: "exact", head: true }).eq("site", site);
       if (f) q = f(q);
       return q.then((r: any) => r.count || 0);
     };

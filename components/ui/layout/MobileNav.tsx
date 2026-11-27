@@ -8,7 +8,8 @@ import {
   Menu, Store, Warehouse, Globe, Zap, Mountain,
   LogOut, Settings, ChevronDown, Check, LayoutDashboard, X, ShoppingBag,
 } from "lucide-react";
-import { websiteNavItems } from "@/app/config/website-nav-config";
+import { websiteNavItemsFor } from "@/app/config/website-nav-config";
+import type { WebSite } from "@/app/config/business-constants";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,8 @@ interface MobileNavProps {
   isWireman?: boolean;
   isSierra?: boolean;
   isWebsite?: boolean;
+  /** Which online shop the website portal is for (default BK Wiring). */
+  webSite?: WebSite;
 }
 
 export function MobileNav({
@@ -58,7 +61,9 @@ export function MobileNav({
   isWireman = false,
   isSierra = false,
   isWebsite = false,
+  webSite = "bk",
 }: MobileNavProps) {
+  const isChampikaWeb = isWebsite && webSite === "champika";
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -87,7 +92,7 @@ export function MobileNav({
   }, []);
 
   let navSections;
-  if (isWebsite)           navSections = websiteNavItems;
+  if (isWebsite)           navSections = websiteNavItemsFor(webSite);
   else if (isWireman)      navSections = wiremanOfficeNavItems;
   else if (isSierra)       navSections = sierraOfficeNavItems;
   else if (isOrange)       navSections = orangeOfficeNavItems;
@@ -121,7 +126,7 @@ export function MobileNav({
   const isAdmin = user.role === "admin";
   const isOfficePortal = isOrange || isRetail || isDistribution || isWireman || isSierra || isWebsite;
 
-  const currentBusinessId = isWebsite ? BUSINESS_IDS.WEBSITE
+  const currentBusinessId = isWebsite ? (isChampikaWeb ? BUSINESS_IDS.CHAMPIKA_WEBSITE : BUSINESS_IDS.WEBSITE)
     : isOrange ? BUSINESS_IDS.ORANGE_AGENCY
     : isRetail       ? BUSINESS_IDS.CHAMPIKA_RETAIL
     : isDistribution ? BUSINESS_IDS.CHAMPIKA_DISTRIBUTION
@@ -134,7 +139,7 @@ export function MobileNav({
 
   const CurrentIcon   = isWebsite ? ShoppingBag : isWireman ? Zap : isSierra ? Mountain : isOrange ? Globe
     : isRetail ? Store : isDistribution ? Warehouse : LayoutDashboard;
-  const currentLabel  = isWebsite ? "BK Wiring Website" : isWireman ? "Wireman Agency" : isSierra ? "Sierra Agency"
+  const currentLabel  = isWebsite ? (isChampikaWeb ? "Champika Website" : "BK Wiring Website") : isWireman ? "Wireman Agency" : isSierra ? "Sierra Agency"
     : isOrange ? "Orange Agency" : isRetail ? "Champika Retail"
     : isDistribution ? "Distribution" : "Admin Dashboard";
   const currentIconBg = isWebsite ? "bg-teal-100" : isWireman ? "bg-red-100" : isSierra ? "bg-purple-100"
@@ -231,6 +236,7 @@ export function MobileNav({
                       id === BUSINESS_IDS.WIREMAN_AGENCY        ? "bg-red-500"    :
                       id === BUSINESS_IDS.SIERRA_AGENCY         ? "bg-purple-500" :
                       id === BUSINESS_IDS.WEBSITE               ? "bg-teal-500"   :
+                      id === BUSINESS_IDS.CHAMPIKA_WEBSITE      ? "bg-rose-500"   :
                       "bg-gray-400";
 
                     return (

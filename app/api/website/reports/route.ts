@@ -16,6 +16,7 @@ const dayLK = (iso: string) => new Date(new Date(iso).getTime() + 5.5 * 3600 * 1
 export async function GET(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const sp = request.nextUrl.searchParams;
     const today = dayLK(new Date().toISOString());
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
       .from("web_orders")
       .select(
         "id, created_at, status, payment_method, payment_status, subtotal, discount_amount, delivery_fee, total, order_id, source_quote_id, delivery_address, web_order_items(web_product_id, product_id, name, qty, line_total, web_products(name, web_category_id, web_sub_category_id, web_brand_id))",
-      )
+      ).eq("site", site)
       .gte("created_at", startUtc)
       .lt("created_at", endUtc)
       .order("created_at");
@@ -52,8 +53,8 @@ export async function GET(request: NextRequest) {
     }
 
     const [{ data: cats }, { data: brands }] = await Promise.all([
-      supabaseAdmin.from("web_categories").select("id, name"),
-      supabaseAdmin.from("web_brands").select("id, name"),
+      supabaseAdmin.from("web_categories").select("id, name").eq("site", site),
+      supabaseAdmin.from("web_brands").select("id, name").eq("site", site),
     ]);
     const catName = new Map((cats || []).map((c: any) => [c.id, c.name]));
     const brandName = new Map((brands || []).map((b: any) => [b.id, b.name]));
@@ -123,8 +124,8 @@ export async function GET(request: NextRequest) {
     for (const o of orders || []) statusCount[o.status] = (statusCount[o.status] || 0) + 1;
 
     const [{ count: newCustomers }, { data: quotes }] = await Promise.all([
-      supabaseAdmin.from("web_customers").select("id", { count: "exact", head: true }).gte("created_at", startUtc).lt("created_at", endUtc),
-      supabaseAdmin.from("web_quote_requests").select("status").gte("created_at", startUtc).lt("created_at", endUtc),
+      supabaseAdmin.from("web_customers").select("id", { count: "exact", head: true }).eq("site", site).gte("created_at", startUtc).lt("created_at", endUtc),
+      supabaseAdmin.from("web_quote_requests").select("status").eq("site", site).gte("created_at", startUtc).lt("created_at", endUtc),
     ]);
     const quoteCount: Record<string, number> = {};
     for (const q of quotes || []) quoteCount[q.status] = (quoteCount[q.status] || 0) + 1;

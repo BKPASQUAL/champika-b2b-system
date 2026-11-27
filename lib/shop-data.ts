@@ -4,7 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getVisitorTier } from "@/lib/web-auth";
 import { loadPriceRules, resolveVariantPrice, type PriceTier } from "@/lib/web-pricing";
 import { searchGroups } from "@/lib/web-search";
-import { shopBaseFor } from "@/lib/shop-host";
+import { shopBaseFor, shopUrlFor } from "@/lib/shop-host";
+import { getRequestSite, type WebSite } from "@/lib/web-site";
 import { shopCached } from "@/lib/shop-cache";
 
 /**
@@ -89,8 +90,14 @@ export type DeliveryInfo = { flatFee: number; freeOver: number; /** Areas we del
 
 // ---------------------------------------------------------------- helpers
 
-/** Link prefix for this request: "" on the shop domain, "/shop" elsewhere. */
-export const getShopBase = cache(async () => shopBaseFor((await headers()).get("host")));
+/** Which shop this request is for ("bk" | "champika"). */
+export const getShopSite = getRequestSite;
+
+/** Full address of this shop (its own domain; on the B2B domain the host + /shop or /champika). */
+export const getShopUrl = cache(async () => shopUrlFor(await getRequestSite(), (await headers()).get("host")));
+
+/** Link prefix for this request: "" on the shop domain, "/shop" or "/champika" elsewhere. */
+export const getShopBase = cache(async () => shopBaseFor((await headers()).get("host"), await getRequestSite()));
 
 const getTier = cache(async (): Promise<PriceTier> => {
   try {
@@ -100,12 +107,12 @@ const getTier = cache(async (): Promise<PriceTier> => {
   }
 });
 
-const cachedPriceRules = shopCached(() => loadPriceRules(), "price-rules");
+const cachedPriceRules = shopCached((site) => loadPriceRules(site), "price-rules");
 const getRules = cache(() => cachedPriceRules().catch(() => []));
 
 /** Raw rows (cacheable JSON); a missing column throws so the error is not cached. */
-const cachedItemKindRows = shopCached(async () => {
-  const { data, error } = await supabaseAdmin.from("web_products").select("id, order_type, lead_time").neq("order_type", "normal");
+const cachedItemKindRows = shopCached(async (site) => {
+  const { data, error } = await supabaseAdmin.from("web_products").select("id, order_type, lead_time").eq("site", site).neq("order_type", "normal");
   if (error) throw new Error(error.message);
   return (data || []) as any[];
 }, "item-kinds");
@@ -163,8 +170,8 @@ async function toCards(rows: any[], tierOverride?: PriceTier): Promise<ShopProdu
 
 // ---------------------------------------------------------------- settings
 
-const cachedSetting = shopCached(async (key: string) => {
-  const { data } = await supabaseAdmin.from("web_settings").select("value").eq("key", key).maybeSingle();
+const cachedSetting = shopCached(async (site, key: string) => {
+  const { data } = await supabaseAdmin.from("web_settings").select("value").eq("site", site).eq("key", key).maybeSingle();
   return data?.value ?? null;
 }, "setting");
 
@@ -174,8 +181,9 @@ async function getSetting<T>(key: string): Promise<T | null> {
 
 export const getStoreInfo = cache(async (): Promise<StoreInfo> => {
   const s = (await getSetting<any>("store")) || {};
+  const site = await getRequestSite();
   return {
-    name: s.name || "BK Wiring",
+    name: s.name || (site === "champika" ? "Champika Hardware & Distribution" : "BK Wiring"),
     phone: s.phone || "",
     whatsapp: s.whatsapp || "",
     address: s.address || "",
@@ -207,19 +215,21 @@ export function deliveryFee(subtotal: number, d: DeliveryInfo): number {
 // ---------------------------------------------------------------- categories & brands
 
 /** Active categories as a tree (main → sub), with published product counts. */
-export const getCategoryTree = cache(shopCached(async (): Promise<ShopCategory[]> => {
+export const getCategoryTree = cache(shopCached(async (site): Promise<ShopCategory[]> => {
   const [{ data: cats }, { data: prods }, { data: fams }] = await Promise.all([
     supabaseAdmin
       .from("web_categories")
       .select("id, name, slug, parent_id, image_url, description, sort_order")
+      .eq("site", site)
       .eq("is_active", true)
       .order("sort_order")
       .order("name"),
     supabaseAdmin
       .from("web_products")
       .select("web_category_id, web_sub_category_id, extra_category_ids, web_family_id")
+      .eq("site", site)
       .eq("is_published", true),
-    supabaseAdmin.from("web_product_families").select("*").eq("is_active", true).order("sort_order").order("name"),
+    supabaseAdmin.from("web_product_families").select("*").eq("site", site).eq("is_active", true).order("sort_order").order("name"),
   ]);
   const famCount: Record<string, number> = {};
   for (const p of prods || []) if (p.web_family_id) famCount[p.web_family_id] = (famCount[p.web_family_id] || 0) + 1;
@@ -261,10 +271,11 @@ export async function getCategoryBySlug(slug: string) {
   return null;
 }
 
-export const getBrands = cache(shopCached(async (): Promise<ShopBrand[]> => {
+export const getBrands = cache(shopCached(async (site): Promise<ShopBrand[]> => {
   const { data } = await supabaseAdmin
     .from("web_brands")
     .select("id, name, slug, logo_url, parent_id, sort_order")
+    .eq("site", site)
     .eq("is_active", true)
     .order("sort_order")
     .order("name");
@@ -272,16 +283,17 @@ export const getBrands = cache(shopCached(async (): Promise<ShopBrand[]> => {
 }, "brands"));
 
 /** Main brands for "Shop by brand" on the home page. */
-export const getFeaturedBrands = shopCached(async (): Promise<ShopBrand[]> => {
+export const getFeaturedBrands = shopCached(async (site): Promise<ShopBrand[]> => {
   const [{ data: brands }, { data: prods }] = await Promise.all([
     supabaseAdmin
       .from("web_brands")
       .select("id, name, slug, logo_url, parent_id, is_featured, sort_order")
+      .eq("site", site)
       .eq("is_active", true)
       .is("parent_id", null)
       .order("sort_order")
       .order("name"),
-    supabaseAdmin.from("web_products").select("web_brand_id, web_sub_brand_id").eq("is_published", true),
+    supabaseAdmin.from("web_products").select("web_brand_id, web_sub_brand_id").eq("site", site).eq("is_published", true),
   ]);
   const counts: Record<string, number> = {};
   for (const p of prods || []) {
@@ -300,10 +312,11 @@ export const getFeaturedBrands = shopCached(async (): Promise<ShopBrand[]> => {
   return featured.length > 0 ? featured : all;
 }, "featured-brands");
 
-export const getBanners = shopCached(async () => {
+export const getBanners = shopCached(async (site) => {
   const { data } = await supabaseAdmin
     .from("web_banners")
     .select("id, title, image_url, link")
+    .eq("site", site)
     .eq("is_active", true)
     .order("sort_order");
   return (data || []).map((b: any) => ({ id: b.id as string, title: b.title as string | null, imageUrl: b.image_url as string, link: b.link as string | null }));
@@ -327,12 +340,12 @@ export type ProductQuery = {
 /** Published products as cards. Filters run in the database; prices on the server. */
 export async function getProducts(q: ProductQuery = {}): Promise<ShopProductCard[]> {
   const { tier, fresh, ...filters } = q;
-  return toCards(await (fresh ? loadProductRows(filters) : cachedProductRows(filters)), tier);
+  return toCards(await (fresh ? loadProductRows(await getRequestSite(), filters) : cachedProductRows(filters)), tier);
 }
 
-async function loadProductRows(q: Omit<ProductQuery, "tier" | "fresh">): Promise<any[]> {
+async function loadProductRows(site: WebSite, q: Omit<ProductQuery, "tier" | "fresh">): Promise<any[]> {
   const build = (useSearchKey: boolean) => {
-    let query = supabaseAdmin.from("web_products").select(CARD_SELECT).eq("is_published", true);
+    let query = supabaseAdmin.from("web_products").select(CARD_SELECT).eq("site", site).eq("is_published", true);
     if (q.categoryId)
       query = query.or(
         `web_category_id.eq.${q.categoryId},web_sub_category_id.eq.${q.categoryId},extra_category_ids.cs.{${q.categoryId}}`,
@@ -363,8 +376,8 @@ export async function getNewestProducts(limit = 8) {
 }
 
 /** Ids of categories with the "See it on your wall" preview on. Empty if the column isn't added yet. */
-const cachedWallPreviewCategoryIds = shopCached(async (): Promise<string[]> => {
-  const { data, error } = await supabaseAdmin.from("web_categories").select("id").eq("wall_preview", true);
+const cachedWallPreviewCategoryIds = shopCached(async (site): Promise<string[]> => {
+  const { data, error } = await supabaseAdmin.from("web_categories").select("id").eq("site", site).eq("wall_preview", true);
   if (error) return [];
   return (data || []).map((c: any) => c.id as string);
 }, "wall-preview-categories");
@@ -393,7 +406,7 @@ export const getProductBySlug = cache(async (slug: string): Promise<ShopProduct 
   };
 });
 
-const cachedProductBySlug = shopCached(async (slug: string): Promise<any | null> => {
+const cachedProductBySlug = shopCached(async (site, slug: string): Promise<any | null> => {
   const query = (extra: string) =>
     supabaseAdmin
       .from("web_products")
@@ -407,6 +420,7 @@ const cachedProductBySlug = shopCached(async (slug: string): Promise<any | null>
           "brand_info:web_brands!web_products_web_brand_id_fkey(name, slug), " +
           "sub_brand_info:web_brands!web_products_web_sub_brand_id_fkey(name, slug)",
       )
+      .eq("site", site)
       .eq("slug", slug)
       .eq("is_published", true)
       .maybeSingle();
@@ -427,7 +441,11 @@ export async function getRelatedProducts(p: ShopProduct, limit = 8) {
 
 /** All published product slugs (sitemap). */
 export async function getAllProductSlugs() {
-  const { data } = await supabaseAdmin.from("web_products").select("slug, updated_at").eq("is_published", true);
+  const { data } = await supabaseAdmin
+    .from("web_products")
+    .select("slug, updated_at")
+    .eq("site", await getRequestSite())
+    .eq("is_published", true);
   return (data || []) as { slug: string; updated_at: string }[];
 }
 
@@ -462,10 +480,11 @@ export function sortProducts(list: ShopProductCard[], sort: SortKey) {
   }
 }
 
-const cachedFamilies = shopCached(async (ids: string[]) => {
+const cachedFamilies = shopCached(async (site, ids: string[]) => {
   const { data } = await supabaseAdmin
     .from("web_product_families")
     .select("id, name, sort_order")
+    .eq("site", site)
     .in("id", ids)
     .eq("is_active", true)
     .order("sort_order")
@@ -538,10 +557,11 @@ export type PromoStripItem = {
  * Active items for the black promotion strip on the home page, in order.
  * Items past their end date are left out. Returns [] when the table is not there yet.
  */
-export const getPromoStrip = shopCached(async (): Promise<PromoStripItem[]> => {
+export const getPromoStrip = shopCached(async (site): Promise<PromoStripItem[]> => {
   const { data, error } = await supabaseAdmin
     .from("web_promo_strip")
     .select("id, title, image_url, link_type, link_value, badge_mode, badge_text, badge_color, ends_at")
+    .eq("site", site)
     .eq("is_active", true)
     .order("sort_order");
   if (error || !data?.length) return [];
@@ -551,10 +571,10 @@ export const getPromoStrip = shopCached(async (): Promise<PromoStripItem[]> => {
   const slugsOf = (t: string) => rows.filter((r: any) => r.link_type === t && r.link_value).map((r: any) => r.link_value as string);
   const [cats, brands] = await Promise.all([
     slugsOf("category").length
-      ? supabaseAdmin.from("web_categories").select("id, slug, image_url").in("slug", slugsOf("category"))
+      ? supabaseAdmin.from("web_categories").select("id, slug, image_url").eq("site", site).in("slug", slugsOf("category"))
       : Promise.resolve({ data: [] as any[] }),
     slugsOf("brand").length
-      ? supabaseAdmin.from("web_brands").select("id, slug, logo_url").in("slug", slugsOf("brand"))
+      ? supabaseAdmin.from("web_brands").select("id, slug, logo_url").eq("site", site).in("slug", slugsOf("brand"))
       : Promise.resolve({ data: [] as any[] }),
   ]);
   const catBy = new Map((cats.data || []).map((c: any) => [c.slug, c]));

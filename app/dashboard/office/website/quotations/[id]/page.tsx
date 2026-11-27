@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { webApi, rs } from "../../_components/api";
 import { QUOTE_TONE } from "../tone";
+import { useWebPortal } from "@/app/dashboard/office/website/_site";
 
 type Item = { webProductId: string; name: string; image: string | null; qty: number; mrp: number | null; autoPrice: number | null; finalPrice: number; cost: number };
 type Detail = {
@@ -47,6 +48,7 @@ const POINT_LABEL: Record<string, string> = {
 };
 
 export default function QuotationEditorPage() {
+  const portalHome = useWebPortal().base;
   const { id } = useParams<{ id: string }>();
   const [q, setQ] = useState<Detail | null>(null);
   const [items, setItems] = useState<Item[]>([]);
@@ -140,7 +142,7 @@ export default function QuotationEditorPage() {
 
   return (
     <div className="space-y-5 pb-16">
-      <Link href="/dashboard/office/website/quotations" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link href={`${portalHome}/quotations`} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Quotations
       </Link>
 
@@ -156,7 +158,7 @@ export default function QuotationEditorPage() {
               {q.validUntil && q.status === "Sent" && ` · valid until ${q.validUntil}`}
             </p>
             {q.order && (
-              <Link href={`/dashboard/office/website/orders/${q.order.id}`} className="text-sm font-semibold text-teal-700 hover:underline">
+              <Link href={`${portalHome}/orders/${q.order.id}`} className="text-sm font-semibold text-teal-700 hover:underline">
                 Became order {q.order.no} →
               </Link>
             )}

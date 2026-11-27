@@ -1,15 +1,20 @@
 "use client";
 
-import { THEME_COOKIE } from "./format";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LANG_COOKIE, makeT, type Lang, type T } from "./i18n";
+import { makeT, type Lang, type T } from "./i18n";
+import type { SiteProfile } from "./site-profile";
+import type { WebSite } from "@/app/config/business-constants";
 
 /** One cart line kept in the browser. Prices are always re-checked on the server. */
 export type CartLine = { id: string; qty: number };
 
 type ShopCtx = {
-  /** Link prefix: "" on bkwiringbadukade.lk, "/shop" when testing on the B2B domain. */
+  /** Which shop this is ("bk" | "champika"). */
+  site: WebSite;
+  /** Fixed words for this shop (delivery area, domain, default name…). */
+  profile: SiteProfile;
+  /** Link prefix: "" on the shop's domain, "/shop" or "/champika" when testing on the B2B domain. */
   base: string;
   href: (path: string) => string;
   store: { name: string; phone: string; whatsapp: string };
@@ -54,12 +59,11 @@ function swap(cart: CartLine[], pairs: [string, string][], clamp: (n: number) =>
 }
 
 const Ctx = createContext<ShopCtx | null>(null);
-const KEY = "bkw_cart_v1";
 export const MAX_QTY = 999;
 
-function readCart(): CartLine[] {
+function readCart(key: string): CartLine[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || "[]");
+    const raw = JSON.parse(localStorage.getItem(key) || "[]");
     return Array.isArray(raw)
       ? raw.filter((l) => typeof l?.id === "string" && Number(l.qty) > 0).map((l) => ({ id: l.id, qty: Math.min(MAX_QTY, Math.floor(l.qty)) }))
       : [];
@@ -69,6 +73,8 @@ function readCart(): CartLine[] {
 }
 
 export function ShopProvider({
+  site = "bk",
+  profile,
   base,
   store,
   initialDark,
@@ -76,6 +82,9 @@ export function ShopProvider({
   customer,
   children,
 }: {
+  site?: WebSite;
+  /** This shop's fixed words (from the server; never the other shop's). */
+  profile: SiteProfile;
   base: string;
   store: ShopCtx["store"];
   initialDark: boolean;
@@ -88,15 +97,17 @@ export function ShopProvider({
   const [dark, setDark] = useState(initialDark);
   const [lang, setLangState] = useState<Lang>(initialLang);
   const router = useRouter();
+  // Each shop keeps its own cart and settings in the browser.
+  const KEY = profile.cartKey;
 
   useEffect(() => {
-    setCart(readCart());
+    setCart(readCart(KEY));
     setReady(true);
     // Keep several open tabs in step.
-    const onStorage = (e: StorageEvent) => e.key === KEY && setCart(readCart());
+    const onStorage = (e: StorageEvent) => e.key === KEY && setCart(readCart(KEY));
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [KEY]);
 
   const save = useCallback((next: CartLine[]) => {
     setCart(next);
@@ -105,7 +116,7 @@ export function ShopProvider({
     } catch {
       /* private mode: cart lasts for this visit only */
     }
-  }, []);
+  }, [KEY]);
 
   // Remember for a year; the layout reads the cookie so pages arrive in the right colours.
   useEffect(() => {
@@ -114,23 +125,25 @@ export function ShopProvider({
   const toggleTheme = useCallback(() => {
     const next = !dark;
     setDark(next);
-    document.cookie = `${THEME_COOKIE}=${next ? "dark" : "light"}; path=/; max-age=31536000; samesite=lax`;
-  }, [dark]);
+    document.cookie = `${profile.themeCookie}=${next ? "dark" : "light"}; path=/; max-age=31536000; samesite=lax`;
+  }, [dark, profile.themeCookie]);
 
   // Remember the language for a year; the server reads it too, so pages arrive translated.
   const setLang = useCallback(
     (next: Lang) => {
       setLangState(next);
-      document.cookie = `${LANG_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+      document.cookie = `${profile.langCookie}=${next}; path=/; max-age=31536000; samesite=lax`;
       document.querySelector(".shop-root")?.classList.toggle("shop-si", next === "si");
       router.refresh();
     },
-    [router],
+    [router, profile.langCookie],
   );
 
   const value = useMemo<ShopCtx>(() => {
     const clamp = (n: number) => Math.max(1, Math.min(MAX_QTY, Math.floor(n) || 1));
     return {
+      site,
+      profile,
       base,
       href: (path: string) => `${base}${path === "/" && base ? "" : path}` || "/",
       store,
@@ -161,7 +174,7 @@ export function ShopProvider({
       setLang,
       t: makeT(lang),
     };
-  }, [base, store, customer, cart, ready, save, dark, toggleTheme, lang, setLang]);
+  }, [site, profile, base, store, customer, cart, ready, save, dark, toggleTheme, lang, setLang]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

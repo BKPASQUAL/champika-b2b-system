@@ -1,11 +1,10 @@
-import { getAllProductSlugs, getBrands, getCategoryTree } from "@/lib/shop-data";
-import { SHOP_URL } from "@/lib/shop-host";
+import { getAllProductSlugs, getBrands, getCategoryTree, getShopUrl } from "@/lib/shop-data";
 
 export const dynamic = "force-dynamic";
 
-/** bkwiringbadukade.lk/sitemap.xml — home, categories, brands and every published product. */
+/** <shop domain>/sitemap.xml — this shop's home, categories, brands and every published product. */
 export async function GET() {
-  const [tree, brands, products] = await Promise.all([getCategoryTree(), getBrands(), getAllProductSlugs()]);
+  const [tree, brands, products, SHOP_URL] = await Promise.all([getCategoryTree(), getBrands(), getAllProductSlugs(), getShopUrl()]);
   const urls: { loc: string; lastmod?: string; priority: string }[] = [{ loc: `${SHOP_URL}/`, priority: "1.0" }];
   for (const c of tree) {
     urls.push({ loc: `${SHOP_URL}/c/${c.slug}`, priority: "0.8" });

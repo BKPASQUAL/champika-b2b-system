@@ -40,7 +40,7 @@ type Priced = {
 };
 
 export function CartView() {
-  const { cart, ready, href, setQty, remove, replaceMany, store, t } = useShop();
+  const { cart, ready, href, setQty, remove, replaceMany, store, t, profile } = useShop();
   const [data, setData] = useState<Priced | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -200,10 +200,12 @@ export function CartView() {
             <Row label={t("Delivery")} value={data?.deliveryFee ? rs(data.deliveryFee) : t("Free")} />
           </dl>
           <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-            Doorstep delivery is currently available across the <strong>Galle area</strong>.
+            {profile.cartNote[0]}
+            <strong>{profile.cartNote[1]}</strong>
+            {profile.cartNote[2]}
           </p>
           {toFree > 0 && (
-            <p className="rounded-lg bg-(--s-soft) px-3 py-2 text-xs text-(--s-ink)">Add {rs(toFree)} more for free delivery in Galle.</p>
+            <p className="rounded-lg bg-(--s-soft) px-3 py-2 text-xs text-(--s-ink)">Add {rs(toFree)} more for free delivery{profile.freeDeliveryWhere}.</p>
           )}
           <div className="flex items-baseline justify-between border-t border-(--s-line) pt-3">
             <span className="font-semibold">{t("Total")}</span>

@@ -14,11 +14,12 @@ import { refreshShop } from "@/lib/shop-cache";
 export async function GET(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const onlyMissing = request.nextUrl.searchParams.get("onlyMissing") === "1";
     let q = supabaseAdmin
       .from("web_products")
-      .select("id, name, web_brand_id, brand:web_brands!web_products_web_brand_id_fkey(name), web_product_variants(products(name, brand))")
+      .select("id, name, web_brand_id, brand:web_brands!web_products_web_brand_id_fkey(name), web_product_variants(products(name, brand))").eq("site", site)
       .order("name");
     if (onlyMissing) q = q.is("web_brand_id", null);
     const { data, error } = await q;
@@ -45,6 +46,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireWebsiteStaff();
   if (auth.error) return auth.error;
+  const site = auth.site;
   try {
     const { assignments } = z
       .object({
@@ -62,7 +64,7 @@ export async function POST(request: NextRequest) {
     for (const [name, productIds] of groups) {
       const { error } = await supabaseAdmin
         .from("web_products")
-        .update({ web_brand_id: name ? ids.get(name) : null, brand_text: name || null, updated_at: new Date().toISOString() })
+        .update({ web_brand_id: name ? ids.get(name) : null, brand_text: name || null, updated_at: new Date().toISOString() }).eq("site", site)
         .in("id", productIds);
       if (error) throw error;
     }
